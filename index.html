@@ -1,591 +1,389 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html class="dark" lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>Visualizer Pro v2</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#a413ec",
+                        "background-light": "#f7f6f8",
+                        "background-dark": "#1c1022",
+                        "surface-dark": "#2a1b32",
+                        "surface-highlight": "#3a2544",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Orbitron:wght@400;700&display=swap');
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1c1022; }
+        ::-webkit-scrollbar-thumb { background: #3a2544; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a413ec; }
 
-        body {
-            background-color: #000;
-            color: #eee;
-            font-family: 'Inter', sans-serif;
-            overflow: hidden;
-            margin: 0;
-            user-select: none; /* Prevent text selection on click */
-        }
-
-        #canvas-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-
-        /* Control Panel Styles */
-        #controls {
-            position: fixed;
-            top: 0;
-            right: -450px; /* Hidden by default */
-            width: 450px;
-            height: 100vh;
-            background: rgba(10, 10, 15, 0.95);
-            backdrop-filter: blur(10px);
-            z-index: 50;
-            border-left: 1px solid #333;
-            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            flex-direction: column;
-            box-shadow: -10px 0 30px rgba(0,0,0,0.8);
-        }
-
-        #controls.active {
-            right: 0;
-        }
-
-        /* Custom Scrollbar */
-        .scroll-content {
-            overflow-y: auto;
-            flex: 1;
-            padding: 1.5rem;
-        }
-        .scroll-content::-webkit-scrollbar {
-            width: 6px;
-        }
-        .scroll-content::-webkit-scrollbar-thumb {
-            background: #444;
-            border-radius: 3px;
-        }
-
-        /* Range Sliders */
-        input[type=range] {
-            -webkit-appearance: none;
-            width: 100%;
-            background: transparent;
-        }
+        input[type=range] { -webkit-appearance: none; background: transparent; }
         input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 16px;
-            width: 16px;
-            border-radius: 50%;
-            background: #3b82f6;
-            cursor: pointer;
-            margin-top: -6px;
-            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
-            transition: transform 0.1s;
-        }
-        input[type=range]::-webkit-slider-thumb:hover {
-            transform: scale(1.2);
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+            background: #a413ec; cursor: pointer; margin-top: -6px;
+            box-shadow: 0 0 10px rgba(164, 19, 236, 0.5); border: 2px solid #fff;
         }
         input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 4px;
-            cursor: pointer;
-            background: #333;
-            border-radius: 2px;
+            width: 100%; height: 4px; cursor: pointer; background: #3a2544; border-radius: 2px;
         }
 
-        .section-header {
-            font-family: 'Orbitron', sans-serif;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 5px;
-            margin-bottom: 15px;
-            color: #3b82f6;
-            font-size: 0.9rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        body { background-color: #000; overflow: hidden; margin: 0; font-family: 'Space Grotesk', sans-serif; }
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
 
-        .control-group {
-            background: rgba(255,255,255,0.03);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            border: 1px solid rgba(255,255,255,0.05);
+        #console-ui {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 50;
+            background: rgba(28, 16, 34, 0.75); backdrop-filter: blur(25px);
+            display: flex; flex-direction: column; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0; pointer-events: none; transform: scale(1.05);
         }
+        #console-ui.active { opacity: 1; pointer-events: auto !important; transform: scale(1); }
 
-        /* Tabs */
-        .tabs-header {
-            display: flex;
-            background: #0f0f13;
-            border-bottom: 1px solid #333;
-        }
-        .nav-tab {
-            flex: 1;
-            padding: 15px 0;
-            text-align: center;
-            cursor: pointer;
-            font-size: 0.7rem;
-            font-weight: 600;
-            color: #888;
-            transition: all 0.2s;
-            border-bottom: 2px solid transparent;
-            text-transform: uppercase;
-        }
-        .nav-tab:hover {
-            color: #ccc;
-            background: rgba(255,255,255,0.02);
-        }
-        .nav-tab.active {
-            color: #3b82f6;
-            border-bottom: 2px solid #3b82f6;
-            background: rgba(59, 130, 246, 0.05);
-        }
+        .tab-panel { display: none; width: 100%; height: 100%; gap: 1rem; }
+        .tab-panel.active { display: flex; }
 
-        .tab-content {
-            display: none;
-            animation: fadeIn 0.3s ease;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Start Overlay */
         #start-overlay {
-            position: fixed;
-            inset: 0;
-            background: black;
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
+            position: fixed; inset: 0; background: black; z-index: 100;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; color: white;
         }
 
-        .glitch-text {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 4rem;
-            font-weight: bold;
-            position: relative;
-            color: white;
-            text-shadow: 2px 2px 0px #ff00ff, -2px -2px 0px #00ffff;
-            animation: glitch-anim 2s infinite linear alternate-reverse;
+        .knob-container {
+            position: relative; width: 60px; height: 60px; border-radius: 50%;
+            background: conic-gradient(from 180deg, #a413ec 0%, #a413ec 70%, #3a2544 70%, #3a2544 100%);
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); transform: rotate(-135deg);
         }
-
-        @keyframes glitch-anim {
-            0% { text-shadow: 2px 2px 0px #ff00ff, -2px -2px 0px #00ffff; }
-            25% { text-shadow: -2px 2px 0px #ff00ff, 2px -2px 0px #00ffff; }
-            50% { text-shadow: 2px -2px 0px #ff00ff, -2px 2px 0px #00ffff; transform: translate(1px, 1px); }
-            75% { text-shadow: -2px -2px 0px #ff00ff, 2px 2px 0px #00ffff; transform: translate(-1px, -1px); }
-            100% { text-shadow: 2px 2px 0px #ff00ff, -2px -2px 0px #00ffff; }
+        .knob-inner {
+            width: 45px; height: 45px; border-radius: 50%; background: #2a1b32;
+            position: relative; transform: rotate(135deg); display: flex;
+            align-items: center; justify-content: center;
         }
         
-        .tab-btn {
-            padding: 6px 10px;
-            font-size: 0.75rem;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background 0.2s;
-            background: #222;
-            border: 1px solid #333;
-        }
-        .tab-btn.active {
-            background: #3b82f6;
-            border-color: #3b82f6;
-            color: white;
-        }
-        
-        .sub-label {
-            font-size: 0.65rem;
-            color: #888;
-            margin-bottom: 4px;
-            display: block;
-            text-transform: uppercase;
-            font-weight: 600;
-            margin-top: 8px;
-        }
-
-        /* Checkbox wrapper */
-        .check-wrap {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-        }
-        .check-wrap input {
-            accent-color: #3b82f6;
-            width: 16px;
-            height: 16px;
-        }
-        .check-wrap span {
-            font-size: 0.8rem;
-            color: #ccc;
-        }
-
+        .mask-image-circle { mask-image: radial-gradient(circle, black 50%, transparent 50%); }
     </style>
 </head>
-<body>
+<body class="bg-background-dark font-display text-slate-100 min-h-screen flex flex-col overflow-hidden">
 
-    <!-- Start Overlay -->
     <div id="start-overlay">
-        <div class="glitch-text">VISUALIZER</div>
-        <p class="text-gray-400 mt-4 text-lg">Кликните для запуска</p>
-        <div class="text-gray-600 text-sm mt-4 border border-gray-800 p-3 rounded bg-gray-900/50">
-            <p><i class="fas fa-mouse-pointer mr-2"></i> Клик / <span class="border border-gray-600 px-1 rounded text-xs">Q</span> - Настройки</p>
+        <div class="flex items-center gap-6 mb-8">
+            <div class="size-20 text-primary flex items-center justify-center bg-primary/20 rounded-2xl shadow-[0_0_50px_rgba(164,19,236,0.4)]">
+                <span class="material-symbols-outlined text-6xl">equalizer</span>
+            </div>
+            <h1 class="text-7xl font-bold tracking-tighter">VISUALIZER PRO <span class="text-primary">V2</span></h1>
         </div>
+        <p class="text-slate-400 text-2xl animate-pulse uppercase tracking-widest">Кликните для запуска консоли</p>
     </div>
 
-    <!-- Canvas -->
     <div id="canvas-container">
         <canvas id="visualizer"></canvas>
     </div>
 
-    <!-- Control Panel -->
-    <div id="controls">
-        <div class="p-6 pb-2 border-b border-gray-800 flex justify-between items-center">
-            <h2 class="text-xl font-bold font-orbitron text-white">Console <span class="text-blue-500">v2</span></h2>
-            <div class="text-xs text-gray-500 border border-gray-800 px-2 py-1 rounded">PRESS 'Q' TO HIDE</div>
-        </div>
-
-        <!-- Tabs Navigation -->
-        <div class="tabs-header">
-            <div class="nav-tab active" data-target="tab-scene">SCENE</div>
-            <div class="nav-tab" data-target="tab-content">CONTENT</div>
-            <div class="nav-tab" data-target="tab-glitch">GLITCH FX</div>
-            <div class="nav-tab" data-target="tab-light">LIGHTS</div>
-            <div class="nav-tab" data-target="tab-layers">LAYERS</div>
-        </div>
-
-        <div class="scroll-content">
-            
-            <!-- TAB: SCENE (Audio & Theme) -->
-            <div id="tab-scene" class="tab-content active">
-                <div class="control-group">
-                    <h3 class="section-header">Система</h3>
-                    <button id="fs-btn" class="w-full bg-blue-900/50 hover:bg-blue-800 border border-blue-800 text-blue-200 py-2 px-4 rounded mb-2 transition text-xs font-bold uppercase">
-                        <i class="fas fa-expand mr-2"></i> Fullscreen
+    <!-- UI Console -->
+    <div id="console-ui" class="active">
+        <header class="flex items-center justify-between whitespace-nowrap border-b border-[#332839] bg-[#161118] px-6 py-3 shrink-0 z-20">
+            <div class="flex items-center gap-4">
+                <div class="size-8 text-primary flex items-center justify-center bg-primary/20 rounded-lg">
+                    <span class="material-symbols-outlined text-2xl font-bold">equalizer</span>
+                </div>
+                <h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em]">Visualizer Pro v2</h2>
+            </div>
+            <nav class="flex flex-1 justify-center">
+                <div class="flex items-center gap-1 bg-[#2a1b32] p-1 rounded-xl" id="nav-tabs">
+                    <button class="nav-btn px-5 py-2 bg-primary text-white shadow-sm text-sm font-bold rounded-lg" data-tab="scene">СЦЕНА</button>
+                    <button class="nav-btn px-5 py-2 text-slate-400 text-sm font-medium hover:text-white transition-colors rounded-lg" data-tab="content">КОНТЕНТ</button>
+                    <button class="nav-btn px-5 py-2 text-slate-400 text-sm font-medium hover:text-white transition-colors rounded-lg" data-tab="glitch">ГЛИТЧ</button>
+                    <button class="nav-btn px-5 py-2 text-slate-400 text-sm font-medium hover:text-white transition-colors rounded-lg" data-tab="lights">СВЕТ</button>
+                    <button class="nav-btn px-5 py-2 text-slate-400 text-sm font-medium hover:text-white transition-colors rounded-lg" data-tab="layers">СЛОИ</button>
+                </div>
+            </nav>
+            <div class="flex items-center gap-4 justify-end">
+                <div class="flex gap-2">
+                    <button class="flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors shadow-[0_0_15px_rgba(164,19,236,0.3)]">
+                        <span class="material-symbols-outlined text-lg">videocam</span>
+                        <span>В эфир</span>
+                    </button>
+                    <button id="close-console" class="flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-[#332839] text-white text-sm font-bold hover:bg-[#4a3a52] transition-colors">
+                        <span class="material-symbols-outlined text-lg font-bold">visibility</span>
+                        <span>Превью</span>
                     </button>
                 </div>
+                <div class="h-6 w-px bg-[#332839]"></div>
+                <div class="bg-center bg-no-repeat bg-cover rounded-full size-9 ring-2 ring-primary/30" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDzdWzaK8s_QKQFyh4TCf93bflVs8D00OKR4VBgKWQKKTtSJ6VhhoxIR9sQAlELGW1Cx9HMiNUt0tocKXzAwDOzhYnofLeC8DdkWvjFa3o_zHi2jBEWSDciShw11OmweXghzN0q58A684MVq2RqrfLZr7wPaDE5eDtpzEOSJF66N8JgrbyP6tqbYEo8d1SD2N4nLYUv97MwPPP6GfSyxDekd0qOxSLAk3G2VDOUWlmlFVZIHEOmGQ-IaXkpMnWBfopu94LtR5a_zg");'></div>
+            </div>
+        </header>
 
-                <div class="control-group">
-                    <h3 class="section-header">Audio Input</h3>
-                    <div class="space-y-3">
-                        <div>
-                            <span class="sub-label">Gain (Чувствительность)</span>
-                            <input type="range" id="audio-gain" min="0.5" max="5.0" step="0.1" value="1.5">
+        <main class="flex-1 flex overflow-hidden w-full max-w-[1600px] mx-auto p-4 gap-4">
+
+            <!-- PANEL: SCENE (СЦЕНА) -->
+            <div id="tab-scene" class="tab-panel active">
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">settings_system_daydream</span>Система</h3></div>
+                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
+                        <div class="space-y-4 p-4 bg-[#1c1022] rounded-xl border border-[#332839]">
+                            <div class="flex items-center justify-between"><span class="text-sm font-medium text-slate-300">Полноэкранный режим</span><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" type="checkbox" id="fs-toggle"/><div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div></label></div>
+                            <button id="reset-btn" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-red-500/50 text-red-500 hover:bg-red-500/10 transition-colors font-bold text-sm uppercase"><span class="material-symbols-outlined text-lg">restart_alt</span>Глобальный сброс</button>
                         </div>
-                        <div>
-                            <span class="sub-label">Bass Threshold (Порог баса)</span>
-                            <input type="range" id="bass-threshold" min="100" max="255" value="170">
+                        <div class="pt-2 border-t border-[#332839]"><h3 class="text-lg font-bold flex items-center gap-2 mb-4 mt-2"><span class="material-symbols-outlined text-primary">mic</span>Аудиовход</h3><div class="space-y-6">
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-end"><span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Уровень входа</span><span class="text-[10px] font-mono text-primary">-3.2 dB</span></div>
+                                <div class="h-10 bg-slate-900 rounded-lg p-2 flex items-center gap-1 border border-slate-800 shadow-inner relative overflow-hidden">
+                                    <div class="flex-1 h-full flex items-end gap-[2px]">
+                                        <div class="w-1 bg-green-500 h-[40%] rounded-sm"></div><div class="w-1 bg-green-500 h-[60%] rounded-sm"></div><div class="w-1 bg-green-500 h-[85%] rounded-sm"></div><div class="w-1 bg-green-500 h-[50%] rounded-sm"></div><div class="w-1 bg-green-400 h-[90%] rounded-sm"></div><div class="w-1 bg-yellow-400 h-[80%] rounded-sm"></div><div class="w-1 bg-red-500 h-[40%] rounded-sm opacity-50"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="space-y-2"><div class="flex justify-between items-center"><label class="text-sm font-medium text-slate-400 font-bold uppercase text-xs">Чувствительность (Gain)</label><span class="text-xs font-mono bg-[#161118] px-2 py-0.5 rounded text-primary" id="gain-val">1.5</span></div><input class="w-full" max="5.0" min="0.5" step="0.1" type="range" value="1.5" id="audio-gain"/></div>
+                            <div class="space-y-2"><div class="flex justify-between items-center"><label class="text-sm font-medium text-slate-400 font-bold uppercase text-xs">Порог баса</label><span class="text-xs font-mono bg-[#161118] px-2 py-0.5 rounded text-primary" id="bass-val">170</span></div><input class="w-full" max="255" min="0" type="range" value="170" id="bass-threshold"/></div>
+                        </div></div>
+                    </div>
+                </section>
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center bg-gradient-to-r from-transparent to-primary/5">
+                        <h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">palette</span>Визуальный стиль</h3>
+                        <div class="px-2 py-1 bg-primary/10 rounded text-xs text-primary font-bold border border-primary/20" id="active-preset-name">Активен: Neon Pulse</div>
+                    </div>
+                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
+                        <div class="space-y-3"><label class="text-xs font-bold uppercase tracking-wider text-slate-400">Категория</label><div class="grid grid-cols-2 gap-2" id="category-tabs"></div></div>
+                        <div class="space-y-3"><label class="text-xs font-bold uppercase tracking-wider text-slate-400">Пресеты</label><div class="grid grid-cols-3 gap-3" id="preset-grid"></div></div>
+                    </div>
+                </section>
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">blur_on</span>Атмосфера</h3></div>
+                    <div class="p-5 flex-1 overflow-y-auto space-y-8">
+                        <div class="flex flex-col items-center justify-center space-y-4 py-4"><label class="text-sm font-bold uppercase tracking-wider text-slate-400">Сдвиг цвета (Hue Shift)</label>
+                            <div class="relative size-40 rounded-full border-4 border-[#332839] flex items-center justify-center bg-[#161118]">
+                                <div class="absolute inset-2 rounded-full opacity-20 bg-[conic-gradient(from_90deg,red,yellow,lime,aqua,blue,magenta,red)] blur-md"></div>
+                                <div class="absolute inset-0 rounded-full bg-[conic-gradient(from_90deg,red,yellow,lime,aqua,blue,magenta,red)] mask-image-circle p-[2px]"></div>
+                                <div class="text-center z-10"><span class="block text-2xl font-bold text-white" id="hue-val">0°</span><span class="block text-[10px] text-slate-400 uppercase">СДВИГ</span></div>
+                            </div>
+                            <input class="w-full max-w-[200px]" max="360" min="0" type="range" value="0" id="theme-hue"/>
+                        </div>
+                        <div class="space-y-4 p-4 bg-[#1c1022] rounded-xl border border-[#332839]">
+                            <div class="flex justify-between items-center"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-slate-400">light_mode</span><label class="text-xs font-bold text-slate-300 uppercase">Яркость</label></div><span class="text-xs font-mono text-slate-400" id="bright-val">80%</span></div>
+                            <input class="w-full h-2" type="range" value="80" id="global-brightness">
+                        </div>
+                        <div class="space-y-4 p-4 bg-[#1c1022] rounded-xl border border-[#332839]">
+                            <div class="flex justify-between items-center"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary">wb_sunny</span><label class="text-xs font-bold text-slate-300 uppercase">Bloom Intensity</label></div><span class="text-xs font-mono text-primary" id="bloom-val">65%</span></div>
+                            <input class="w-full h-2" type="range" value="65" id="global-bloom">
                         </div>
                     </div>
-                </div>
-
-                <div class="control-group">
-                    <h3 class="section-header">Visual Style</h3>
-                    <div class="flex flex-wrap gap-2 mb-4" id="category-tabs"></div>
-                    <select id="preset-select" class="w-full bg-black/40 border border-gray-700 text-gray-300 rounded p-2 text-sm mb-4 outline-none focus:border-blue-500 transition"></select>
-                    
-                    <div>
-                        <span class="sub-label">Hue Shift (Сдвиг цвета)</span>
-                        <input type="range" id="theme-hue" min="0" max="360" value="0">
-                        <div class="h-1 w-full rounded mt-1" style="background: linear-gradient(to right, red, orange, yellow, green, cyan, blue, violet, red);"></div>
-                    </div>
-                </div>
+                </section>
             </div>
 
-            <!-- TAB: CONTENT (Bg, Logo, Text) -->
-            <div id="tab-content" class="tab-content">
-                <!-- Background Section -->
-                <div class="control-group">
-                    <h3 class="section-header">Background Media</h3>
-                    <div class="grid grid-cols-2 gap-2 mb-3">
-                        <div>
-                            <span class="sub-label">Image</span>
-                            <input type="file" id="bg-upload" accept="image/*" class="text-xs w-full text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:bg-gray-800 file:text-blue-400">
-                        </div>
-                        <div>
-                            <span class="sub-label">Video</span>
-                            <input type="file" id="video-upload" accept="video/*" class="text-xs w-full text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:bg-gray-800 file:text-blue-400">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <span class="sub-label">Opacity</span>
-                        <input type="range" id="bg-opacity" min="0" max="1" step="0.05" value="0.3">
-                    </div>
-                    
-                    <div class="bg-black/30 p-3 rounded border border-gray-800">
-                        <span class="text-xs font-bold text-gray-400 block mb-2 uppercase">Background FX</span>
+            <!-- PANEL: CONTENT (КОНТЕНТ) -->
+            <div id="tab-content" class="tab-panel">
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">wallpaper</span>Фоновый контент</h3></div>
+                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
                         <div class="grid grid-cols-2 gap-3">
-                            <label class="check-wrap"><input type="checkbox" id="bg-pulse"> <span>Pulse (Bass)</span></label>
-                            <label class="check-wrap"><input type="checkbox" id="bg-shake"> <span>Shake</span></label>
-                            <label class="check-wrap"><input type="checkbox" id="bg-rotate"> <span>Spin</span></label>
+                            <button class="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-[#4b3b54] rounded-xl hover:border-primary/50 hover:bg-[#3a2544] transition-all group relative"><span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary">image</span><span class="text-xs font-medium text-slate-400 group-hover:text-primary uppercase">Изображение</span><input type="file" id="bg-upload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer"></button>
+                            <button class="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-[#4b3b54] rounded-xl hover:border-primary/50 hover:bg-[#3a2544] transition-all group relative"><span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary">movie</span><span class="text-xs font-medium text-slate-400 group-hover:text-primary uppercase">Видео</span><input type="file" id="video-upload" accept="video/*" class="absolute inset-0 opacity-0 cursor-pointer"></button>
                         </div>
-                    </div>
-
-                    <div class="mt-4 bg-black/30 p-3 rounded border border-gray-800">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-xs font-bold text-gray-400 uppercase">Playlist</span>
-                            <label class="check-wrap"><input type="checkbox" id="playlist-enabled"> <span class="text-[10px]">ENABLE</span></label>
-                        </div>
-                        <div class="space-y-3">
+                        <div class="space-y-3"><div class="flex justify-between items-center"><label class="text-sm font-medium text-slate-400 font-bold uppercase text-xs">Прозрачность фона</label><span class="text-xs font-mono bg-[#161118] px-2 py-0.5 rounded text-primary" id="opacity-val">30%</span></div><input class="w-full" max="1" min="0" step="0.05" type="range" value="0.3" id="bg-opacity"/></div>
+                        <div class="space-y-3 pt-4 border-t border-[#332839]"><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Background FX</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="cursor-pointer select-none"><input type="checkbox" class="peer sr-only" id="bg-pulse"><div class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-[#332839] bg-[#161118] peer-checked:bg-primary/20 peer-checked:border-primary peer-checked:text-primary transition-all"><span class="material-symbols-outlined text-xl">blur_on</span><span class="text-[10px] font-bold uppercase">Pulse</span></div></label>
+                            <label class="cursor-pointer select-none"><input type="checkbox" class="peer sr-only" id="bg-shake"><div class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-[#332839] bg-[#161118] peer-checked:bg-primary/20 peer-checked:border-primary peer-checked:text-primary transition-all"><span class="material-symbols-outlined text-xl">vibration</span><span class="text-[10px] font-bold uppercase">Shake</span></div></label>
+                            <label class="cursor-pointer select-none"><input type="checkbox" class="peer sr-only" id="bg-spin"><div class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-[#332839] bg-[#161118] peer-checked:bg-primary/20 peer-checked:border-primary peer-checked:text-primary transition-all"><span class="material-symbols-outlined text-xl">rotate_right</span><span class="text-[10px] font-bold uppercase">Spin</span></div></label>
+                        </div></div>
+                        <div class="bg-[#1c1022] p-4 rounded-xl border border-[#332839] space-y-3 mt-4">
+                            <div class="flex items-center justify-between"><label class="text-[10px] font-bold text-slate-500 uppercase">Плейлист (Playlist)</label><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer" id="playlist-enable"><div class="w-7 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div></label></div>
                             <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <span class="sub-label text-[9px]">Slide Duration (s)</span>
-                                    <input type="range" id="playlist-duration" min="1" max="60" value="5">
-                                </div>
-                                <div class="flex items-end pb-1">
-                                    <label class="check-wrap"><input type="checkbox" id="playlist-loop" checked> <span class="text-[10px]">Loop</span></label>
-                                </div>
+                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Длительность слайда</label><input type="number" id="playlist-duration" class="w-full bg-[#161118] border-none rounded text-xs p-1 font-mono text-center" value="10"></div>
+                                <div class="flex items-center gap-2 justify-end"><label class="text-[8px] text-slate-500 uppercase font-bold">Цикл (Loop)</label><input type="checkbox" id="playlist-loop" class="accent-primary" checked></div>
                             </div>
-                            <div id="playlist-list" class="max-h-32 overflow-y-auto space-y-1 pr-1 border-t border-gray-800 pt-2">
-                                <p class="text-[9px] text-gray-600 text-center py-2">Add images or videos to start playlist</p>
-                            </div>
+                            <div class="flex gap-2"><button id="playlist-prev" class="flex-1 py-1 bg-[#332839] rounded text-[10px] uppercase font-bold">Prev</button><button id="playlist-next" class="flex-1 py-1 bg-[#332839] rounded text-[10px] uppercase font-bold">Next</button><button id="playlist-clear" class="flex-1 py-1 bg-[#332839] rounded text-[10px] uppercase font-bold text-red-400">Clear</button></div>
+                            <div id="playlist-list" class="space-y-1 mt-2 max-h-32 overflow-y-auto"></div>
                         </div>
                     </div>
-                </div>
-
-                <!-- Logo Section -->
-                <div class="control-group">
-                    <h3 class="section-header">Logo / Center</h3>
-                    <input type="file" id="logo-upload" accept="image/*" class="text-xs w-full text-gray-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-gray-800 file:text-blue-400 mb-3">
-                    <div class="mb-3">
-                        <span class="sub-label">Scale</span>
-                        <input type="range" id="logo-size" min="10" max="150" value="40">
-                    </div>
-                     <div class="bg-black/30 p-3 rounded border border-gray-800">
-                        <span class="text-xs font-bold text-gray-400 block mb-2 uppercase">Logo FX</span>
-                        <div class="grid grid-cols-2 gap-3">
-                            <label class="check-wrap"><input type="checkbox" id="anim-pulse-size" checked> <span>Pulse Size</span></label>
-                            <label class="check-wrap"><input type="checkbox" id="anim-pulse-glow"> <span>Glow</span></label>
-                            <label class="check-wrap"><input type="checkbox" id="anim-shake"> <span>Shake</span></label>
-                            <label class="check-wrap"><input type="checkbox" id="anim-sway"> <span>Sway</span></label>
-                        </div>
-                    </div>
-                    <div class="mt-4 bg-black/30 p-3 rounded border border-gray-800">
-                        <span class="text-xs font-bold text-gray-400 block mb-2 uppercase">Logo Equalizer</span>
-                        <div class="space-y-3">
-                            <label class="check-wrap"><input type="checkbox" id="logo-eq-enabled"> <span>Enable EQ around Logo</span></label>
-                            <div>
-                                <span class="sub-label">EQ Type</span>
-                                <select id="logo-eq-type" class="w-full bg-gray-900 text-[10px] text-gray-300 p-1 rounded border border-gray-700 mt-1">
-                                    <option value="circular">Circular</option>
-                                    <option value="square">Square</option>
-                                    <option value="particles">Particles</option>
-                                </select>
-                            </div>
-                            <div>
-                                <span class="sub-label">EQ Strength</span>
-                                <input type="range" id="logo-eq-strength" min="0" max="100" value="50">
-                            </div>
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <span class="sub-label">Padding</span>
-                                    <input type="range" id="logo-eq-padding" min="0" max="100" value="10">
-                                </div>
-                                <div>
-                                    <span class="sub-label">Corners (Rect)</span>
-                                    <input type="range" id="logo-eq-radius" min="0" max="100" value="0">
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <span class="sub-label">Bars Count</span>
-                                    <input type="range" id="logo-eq-count" min="16" max="256" step="16" value="64">
-                                </div>
-                                <div>
-                                    <span class="sub-label">Bar Width</span>
-                                    <input type="range" id="logo-eq-width" min="1" max="10" value="2">
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="check-wrap"><input type="checkbox" id="logo-eq-closed" checked> <span>Closed Loop</span></label>
-                                <div class="w-32">
-                                    <span class="sub-label mt-0">Glow</span>
-                                    <input type="range" id="logo-eq-glow" min="0" max="50" value="0">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Text Section -->
-                <div class="control-group">
-                    <h3 class="section-header">Overlay Text</h3>
-                    <input type="text" id="text-input" placeholder="Введите текст..." class="w-full bg-black/40 text-white rounded p-2 text-sm mb-3 border border-gray-700">
-                    <div class="flex gap-2">
-                         <select id="font-family" class="bg-black/40 text-gray-300 text-xs p-1 rounded border border-gray-700 flex-1">
-                            <option value="Inter">Inter</option>
-                            <option value="Orbitron">Orbitron</option>
-                            <option value="Impact">Impact</option>
-                        </select>
-                        <select id="text-pos" class="bg-black/40 text-gray-300 text-xs p-1 rounded border border-gray-700 w-24">
-                            <option value="center">Center</option>
-                            <option value="top">Top</option>
-                            <option value="bottom">Bottom</option>
-                        </select>
-                    </div>
-                    <div class="mt-3">
-                        <span class="sub-label">Animation Mode</span>
-                        <select id="text-mode" class="w-full bg-black/40 text-gray-300 text-xs p-1 rounded border border-gray-700">
-                            <option value="static">Static</option>
-                            <option value="pulse">Pulse (Bass)</option>
-                            <option value="pingpong">Ping Pong</option>
-                            <option value="float">Floating</option>
-                        </select>
-                    </div>
-                    <div class="mt-3">
-                        <span class="sub-label">Animation Speed</span>
-                        <input type="range" id="text-speed" min="0.1" max="5.0" step="0.1" value="1.0">
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB: GLITCH (New Advanced) -->
-            <div id="tab-glitch" class="tab-content">
-                <div class="control-group border-l-2 border-red-500">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="section-header mb-0 text-red-500 border-none">MASTER GLITCH</h3>
-                        <label class="check-wrap">
-                             <input type="checkbox" id="glitch-enabled">
-                             <span class="text-xs font-bold uppercase text-white">Enable</span>
-                        </label>
-                    </div>
-
-                    <div class="space-y-4 mt-4">
-                        
-                        <!-- 1. RGB SPLIT -->
-                        <div class="bg-black/40 p-3 rounded border border-gray-800">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-xs font-bold text-red-400">RGB CHANNEL SPLIT</span>
-                                <label class="check-wrap"><input type="checkbox" id="glitch-rgb-chaos"> <span class="text-[10px]">CHAOS</span></label>
-                            </div>
-                            <span class="sub-label">Separation Amount</span>
-                            <input type="range" id="glitch-rgb-amount" min="0" max="100" value="0">
-                            
-                            <div class="mt-3 pt-2 border-t border-gray-800">
-                                <span class="sub-label text-[10px] text-gray-500">Mode:</span>
-                                <select id="glitch-rgb-mode" class="w-full bg-gray-900 text-[10px] text-gray-300 p-1 rounded border border-gray-700 mt-1">
-                                    <option value="pattern">Pattern (Red Up/Left, Blue Down/Right)</option>
-                                    <option value="horizontal">Horizontal Only</option>
-                                    <option value="vertical">Vertical Only</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- 2. DISPLACEMENT / SLICE -->
-                        <div class="bg-black/40 p-3 rounded border border-gray-800">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-xs font-bold text-blue-400">PIXEL SLICING</span>
-                            </div>
-                            
-                            <span class="sub-label">Displacement Power</span>
-                            <input type="range" id="glitch-slice-amount" min="0" max="150" value="0">
-                            
-                            <div class="flex gap-2 mt-2">
-                                <div class="flex-1">
-                                    <span class="sub-label">Direction</span>
-                                    <select id="glitch-slice-dir" class="w-full bg-gray-900 text-[10px] text-gray-300 p-1 rounded border border-gray-700">
-                                        <option value="hor">Horizontal</option>
-                                        <option value="ver">Vertical</option>
-                                        <option value="mix">Mix (Combo)</option>
-                                    </select>
-                                </div>
-                                <div class="flex-1">
-                                    <span class="sub-label">Speed</span>
-                                    <input type="range" id="glitch-slice-speed" min="1" max="20" value="10">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 3. NOISE -->
-                        <div class="bg-black/40 p-3 rounded border border-gray-800">
-                            <span class="text-xs font-bold text-gray-400 block mb-2">DIGITAL NOISE</span>
-                            <input type="range" id="glitch-noise-amount" min="0" max="100" value="0">
-                        </div>
-
-                        <!-- 4. BLOCKS -->
-                        <div class="bg-black/40 p-3 rounded border border-gray-800">
-                            <span class="text-xs font-bold text-green-400 block mb-2">SCATTER BLOCKS</span>
-                            <input type="range" id="glitch-block-amount" min="0" max="100" value="0">
-                        </div>
-
-                        <!-- 5. EXTRA FX -->
-                        <div class="bg-black/40 p-3 rounded border border-gray-800">
-                            <span class="text-xs font-bold text-yellow-400 block mb-2">EXTRA FX</span>
+                </section>
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center bg-gradient-to-r from-transparent to-primary/5"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">diamond</span>Логотип и центр</h3></div>
+                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
+                        <button class="w-full bg-[#332839] hover:bg-[#4b3b54] text-white py-2 px-4 rounded-lg font-bold text-sm flex items-center justify-center gap-2 relative uppercase transition-colors"><span class="material-symbols-outlined">upload_file</span>Заменить логотип<input type="file" id="logo-upload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer"></button>
+                        <div class="space-y-2"><div class="flex justify-between items-center"><label class="text-xs font-bold uppercase tracking-wider text-slate-500">Масштаб</label><span class="text-xs text-slate-400 font-mono" id="logo-size-val">40%</span></div><input class="w-full" max="200" min="10" type="range" value="40" id="logo-size"/></div>
+                        <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-4">
+                            <div class="flex items-center justify-between"><h4 class="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-tighter"><span class="material-symbols-outlined text-primary text-base">graphic_eq</span>Эквалайзер вокруг лого</h4><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="logo-eq-enabled" class="sr-only peer"><div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner"></div></label></div>
+                            <div class="space-y-1"><label class="text-[10px] text-slate-500 uppercase font-bold">Тип формы</label><select id="logo-eq-type" class="w-full bg-[#332839] text-white text-sm rounded-lg px-3 py-1.5 border-none appearance-none font-medium"><option value="circular">Circular Outline</option><option value="square">Square Border</option><option value="hexagon">Hexagon</option><option value="sidebars">Side Bars</option><option value="particles">Particles</option></select></div>
                             <div class="grid grid-cols-2 gap-3">
-                                <label class="check-wrap"><input type="checkbox" id="glitch-invert"> <span>Invert</span></label>
-                                <label class="check-wrap"><input type="checkbox" id="glitch-zoom"> <span>Beat Zoom</span></label>
+                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Сила (Strength)</label><input type="range" id="logo-eq-strength" class="w-full h-1" max="5" min="0.1" step="0.1" value="1.2"></div>
+                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Отступ (Padding)</label><input type="range" id="logo-eq-padding" class="w-full h-1" max="100" min="0" value="20"></div>
+                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Закругление</label><input type="range" id="logo-eq-radius" class="w-full h-1" max="50" min="0" value="5"></div>
+                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Кол-во полос</label><input type="range" id="logo-eq-bars" class="w-full h-1" max="128" min="8" value="64"></div>
+                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Толщина</label><input type="range" id="logo-eq-width" class="w-full h-1" max="10" min="1" value="2"></div>
+                                <div class="space-y-1 flex items-end gap-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Замкнуть</label><input type="checkbox" id="logo-eq-closed" class="accent-primary" checked></div>
                             </div>
+                            <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Свечение (Glow)</label><input type="range" id="logo-eq-glow" class="w-full h-1" max="100" min="0" value="50"></div>
                         </div>
+                        <div class="pt-4 border-t border-[#332839]"><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">Logo FX</label><div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-center gap-2 p-2 bg-[#1c1022] rounded border border-[#332839] cursor-pointer"><input type="checkbox" id="logo-fx-pulse-size" class="accent-primary"><span class="text-[10px] font-bold uppercase">Pulse Size</span></label>
+                            <label class="flex items-center gap-2 p-2 bg-[#1c1022] rounded border border-[#332839] cursor-pointer"><input type="checkbox" id="logo-fx-pulse-glow" class="accent-primary"><span class="text-[10px] font-bold uppercase">Pulse Glow</span></label>
+                            <label class="flex items-center gap-2 p-2 bg-[#1c1022] rounded border border-[#332839] cursor-pointer"><input type="checkbox" id="logo-fx-shake" class="accent-primary"><span class="text-[10px] font-bold uppercase">Shake</span></label>
+                            <label class="flex items-center gap-2 p-2 bg-[#1c1022] rounded border border-[#332839] cursor-pointer"><input type="checkbox" id="logo-fx-sway" class="accent-primary"><span class="text-[10px] font-bold uppercase">Sway</span></label>
+                        </div></div>
                     </div>
-                </div>
+                </section>
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">title</span>Текстовый слой</h3></div>
+                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
+                        <textarea id="text-input" class="w-full h-20 bg-[#161118] border border-[#332839] rounded-lg p-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-none text-lg uppercase font-bold" placeholder="ВВЕДИТЕ ТЕКСТ..."></textarea>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1"><label class="text-xs text-slate-500 block uppercase font-bold">Шрифт</label><select id="font-family" class="w-full bg-[#161118] border border-[#332839] text-white text-sm rounded-lg px-2 py-1 appearance-none font-medium"><option value="Space Grotesk">Space Grotesk</option><option value="Orbitron">Orbitron</option><option value="Impact">Impact</option></select></div>
+                            <div class="space-y-1"><label class="text-xs text-slate-500 block uppercase font-bold">Скорость</label><input type="range" id="text-speed" class="w-full h-2" value="50"></div>
+                        </div>
+                        <div class="space-y-2"><label class="text-xs text-slate-500 block uppercase font-bold">Позиция</label><div class="bg-[#161118] p-1 rounded-lg flex border border-[#332839]" id="text-position">
+                            <button class="flex-1 py-1.5 rounded text-slate-400 hover:text-white transition-colors flex justify-center items-center" data-pos="top"><span class="material-symbols-outlined text-xl">align_vertical_top</span></button>
+                            <button class="flex-1 py-1.5 rounded bg-[#3a2544] text-primary shadow-sm flex justify-center items-center" data-pos="center"><span class="material-symbols-outlined text-xl">align_vertical_center</span></button>
+                            <button class="flex-1 py-1.5 rounded text-slate-400 hover:text-white transition-colors flex justify-center items-center" data-pos="bottom"><span class="material-symbols-outlined text-xl">align_vertical_bottom</span></button>
+                        </div></div>
+                        <div class="space-y-3 pt-4 border-t border-[#332839]"><label class="text-xs font-bold text-slate-500 uppercase tracking-widest">Режим анимации</label><div class="space-y-1.5">
+                            <label class="flex items-center gap-3 p-2 rounded-lg border border-transparent bg-[#161118] cursor-pointer"><input type="radio" name="text-anim" value="static" checked class="accent-primary"><span class="text-xs font-medium uppercase">Static (Статичный)</span></label>
+                            <label class="flex items-center gap-3 p-2 rounded-lg border border-transparent bg-[#161118] cursor-pointer"><input type="radio" name="text-anim" value="pulse" class="accent-primary"><span class="text-xs font-medium uppercase">Pulse (Пульсация)</span></label>
+                            <label class="flex items-center gap-3 p-2 rounded-lg border border-transparent bg-[#161118] cursor-pointer"><input type="radio" name="text-anim" value="ping" class="accent-primary"><span class="text-xs font-medium uppercase">Ping Pong</span></label>
+                            <label class="flex items-center gap-3 p-2 rounded-lg border border-transparent bg-[#161118] cursor-pointer"><input type="radio" name="text-anim" value="floating" class="accent-primary"><span class="text-xs font-medium uppercase">Floating (Плавный)</span></label>
+                        </div></div>
+                    </div>
+                </section>
             </div>
 
-            <!-- TAB: LIGHTS -->
-            <div id="tab-light" class="tab-content">
-                <div class="control-group">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="section-header mb-0">Strobe Light</h3>
-                        <input type="checkbox" id="strobe-active" class="h-4 w-4 accent-blue-500">
+            <!-- PANEL: GLITCH (ГЛИТЧ) -->
+            <div id="tab-glitch" class="tab-panel">
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center bg-gradient-to-r from-transparent to-primary/5"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">splitscreen</span>Каналы и разрезы</h3><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="glitch-enabled" class="sr-only peer" checked><div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner"></div></label></div>
+                    <div class="p-5 flex-1 overflow-y-auto space-y-8">
+                        <div class="space-y-4"><div class="flex items-center justify-between"><h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Разделение RGB</h4><button id="glitch-chaos" class="text-[10px] bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-0.5 rounded font-mono uppercase transition-colors">ХАОС: ВЫКЛ</button></div>
+                        <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-5">
+                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Сила смещения</label><span class="text-xs text-primary font-mono" id="rgb-amount-val">12px</span></div><input class="w-full h-1" max="100" min="0" type="range" value="12" id="glitch-rgb-amount"/></div>
+                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Интенсивность</label><span class="text-xs text-primary font-mono" id="rgb-intensity-val">45%</span></div><input class="w-full h-1" max="100" min="0" type="range" value="45" id="glitch-rgb-intensity"/></div>
+                            <div class="grid grid-cols-3 gap-2 pt-2">
+                                <button class="rgb-mode-btn flex flex-col items-center justify-center p-2 rounded-lg bg-primary/20 border border-primary text-primary" data-mode="pattern"><span class="material-symbols-outlined">pattern</span><span class="text-[10px] font-bold uppercase mt-1">Паттерн</span></button>
+                                <button class="rgb-mode-btn flex flex-col items-center justify-center p-2 rounded-lg bg-[#332839] text-slate-400 hover:text-white" data-mode="horizontal"><span class="material-symbols-outlined">swap_horiz</span><span class="text-[10px] font-bold uppercase mt-1">Гориз.</span></button>
+                                <button class="rgb-mode-btn flex flex-col items-center justify-center p-2 rounded-lg bg-[#332839] text-slate-400 hover:text-white" data-mode="vertical"><span class="material-symbols-outlined">swap_vert</span><span class="text-[10px] font-bold uppercase mt-1">Верт.</span></button>
+                            </div>
+                        </div></div>
+                        <div class="space-y-4 pt-4 border-t border-[#332839]"><div class="flex items-center justify-between"><h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Разрез пикселей</h4><div class="flex gap-1 bg-[#161118] p-1 rounded-md"><button class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-700 text-white uppercase">Г</button><button class="px-2 py-0.5 text-[10px] font-bold rounded text-slate-500 uppercase">В</button></div></div>
+                        <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-4"><div class="space-y-2"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Плотность (Density)</label><span class="text-[10px] text-primary font-mono" id="slice-density-val">8</span></div><input type="range" id="glitch-slice-density" class="w-full h-1" max="50" min="1" value="8"></div><div class="space-y-2"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Сдвиг (Shift)</label><span class="text-[10px] text-primary font-mono" id="slice-shift-val">22%</span></div><input type="range" id="glitch-slice-shift" class="w-full h-1" max="100" min="0" value="22"></div></div></div>
                     </div>
-                    <div class="space-y-2 pl-2 border-l border-gray-700 ml-1">
-                         <div class="flex justify-between items-center">
-                            <span class="sub-label mt-0">Color</span>
-                            <input type="color" id="strobe-color" value="#ffffff" class="bg-transparent border-none w-6 h-6 cursor-pointer">
-                        </div>
-                        <div>
-                            <span class="sub-label">Frequency</span>
-                            <input type="range" id="strobe-speed" min="1" max="40" value="15">
-                        </div>
-                         <div>
-                            <span class="sub-label">Audio Reactivity</span>
-                            <input type="range" id="strobe-reactivity" min="0" max="1" step="0.1" value="0.5">
-                        </div>
+                </section>
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">noise_control_off</span>Шум и искажения</h3></div>
+                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
+                        <div class="space-y-4 pt-2"><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><span class="material-symbols-outlined text-sm">grain</span> Цифровой шум</h4>
+                        <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-5">
+                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Сила зерна</label><span class="text-xs text-primary font-mono" id="noise-amount-val">15%</span></div><input class="w-full h-1" max="100" min="0" type="range" value="15" id="glitch-noise-amount"/></div>
+                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Цветной шум</label><span class="text-xs text-primary font-mono" id="color-noise-val">80%</span></div><input class="w-full h-1" max="100" min="0" type="range" value="80" id="glitch-color-noise"/></div>
+                        </div></div>
+                        <div class="space-y-4 pt-2"><div class="flex justify-between items-center"><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><span class="material-symbols-outlined text-sm">grid_view</span> Разброс блоков</h4><label class="relative inline-flex items-center"><input type="checkbox" id="glitch-scatter-random" class="sr-only peer"><div class="w-7 h-4 bg-slate-700 rounded-full peer peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-3"></div></label></div>
+                        <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-5">
+                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Размер блока</label><span class="text-xs text-primary font-mono" id="block-size-val">64px</span></div><input class="w-full h-1" max="128" min="16" step="16" type="range" value="64" id="glitch-block-size"/></div>
+                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Дальность</label><span class="text-xs text-primary font-mono" id="scatter-range-val">10%</span></div><input class="w-full h-1" max="100" min="0" type="range" value="10" id="glitch-scatter-range"/></div>
+                        </div></div>
                     </div>
-                </div>
-
-                <div class="control-group">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="section-header mb-0 text-green-400">Laser Show</h3>
-                        <input type="checkbox" id="laser-active" class="h-4 w-4 accent-green-500">
+                </section>
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">bolt</span>Триггер-эффекты</h3></div>
+                    <div class="p-5 flex-1 flex flex-col gap-6">
+                        <div class="space-y-4"><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider uppercase">Доп. эффекты</h4>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button id="fx-invert" class="fx-btn flex flex-col items-center justify-center p-4 rounded-xl border border-[#332839] bg-[#1c1022] hover:bg-[#3a2544] hover:border-primary transition-all uppercase" data-fx="invert"><span class="material-symbols-outlined text-4xl text-slate-400">invert_colors</span><span class="text-[10px] font-bold text-slate-400 mt-2 tracking-widest uppercase">Инверсия</span></button>
+                            <button id="fx-zoom" class="fx-btn flex flex-col items-center justify-center p-4 rounded-xl border border-primary bg-primary/10 transition-all uppercase shadow-[0_0_15px_rgba(164,19,236,0.15)]" data-fx="zoom"><span class="material-symbols-outlined text-4xl text-primary animate-pulse">zoom_in_map</span><span class="text-[10px] font-bold text-primary mt-2 tracking-widest uppercase">Beat Zoom</span></button>
+                        </div></div>
                     </div>
-                    <div class="space-y-2 pl-2 border-l border-gray-700 ml-1">
-                        <select id="laser-preset" class="w-full bg-black/40 text-xs rounded p-2 border border-green-900/50 text-green-100">
-                            <option value="scan">Scanner (Horiz)</option>
-                            <option value="rain">Matrix Rain</option>
-                            <option value="cross">Crossfire</option>
-                            <option value="cone">Cone Emitter</option>
-                            <option value="random">Chaos Rays</option>
-                        </select>
-                        <div class="flex justify-between items-center">
-                            <span class="sub-label mt-0">Color</span>
-                            <input type="color" id="laser-color" value="#00ff00" class="bg-transparent border-none w-6 h-6 cursor-pointer">
-                        </div>
-                        <div>
-                            <span class="sub-label">Beams Count</span>
-                            <input type="range" id="laser-count" min="1" max="50" value="10">
-                        </div>
-                    </div>
-                </div>
+                </section>
             </div>
 
-            <!-- TAB: LAYERS -->
-            <div id="tab-layers" class="tab-content">
-                <div class="control-group">
-                    <h3 class="section-header">Layer Visibility Order</h3>
-                    <p class="text-[10px] text-gray-500 mb-3">Top layers appear above bottom layers.</p>
-                    <div id="layer-list" class="space-y-2">
-                        <!-- Dynamic content -->
+            <!-- PANEL: LIGHTS (СВЕТ) -->
+            <div id="tab-lights" class="tab-panel">
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">flash_on</span>Стробоскоп</h3><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="strobe-active" class="sr-only peer" checked><div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner"></div></label></div>
+                    <div class="p-6 flex-1 overflow-y-auto space-y-8">
+                        <div class="space-y-3"><label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Цвет вспышки</label>
+                            <div class="flex items-center gap-3"><input type="color" id="strobe-color" value="#a413ec" class="size-12 rounded-lg bg-transparent border-none cursor-pointer shadow-[0_0_15px_rgba(164,19,236,0.5)]"><input class="w-full bg-[#161118] border border-[#332839] rounded px-3 py-2 text-sm font-mono text-white uppercase" type="text" value="#A413EC" id="strobe-hex"/></div>
+                        </div>
+                        <div class="space-y-6">
+                            <div class="space-y-2"><div class="flex justify-between items-center"><label class="text-sm font-medium text-slate-300 uppercase font-bold text-xs tracking-tighter">Частота (Frequency)</label><span class="text-xs font-mono bg-[#161118] px-2 py-0.5 rounded text-primary" id="strobe-speed-val">12 Hz</span></div><input class="w-full h-1" max="60" min="1" type="range" value="12" id="strobe-speed"/></div>
+                            <div class="space-y-2"><div class="flex justify-between items-center"><label class="text-sm font-medium text-slate-300 uppercase font-bold text-xs tracking-tighter">Ширина импульса</label><span class="text-xs font-mono bg-[#161118] px-2 py-0.5 rounded text-primary" id="strobe-pulse-val">45 ms</span></div><input class="w-full h-1" max="200" min="10" type="range" value="45" id="strobe-pulse-width"/></div>
+                        </div>
+                        <div class="flex flex-col items-center justify-center pt-4 border-t border-[#332839]"><h4 class="text-[10px] font-bold text-slate-500 mb-6 uppercase tracking-widest">Аудиореактивность</h4><div class="knob-container"><div class="knob-inner"><span class="material-symbols-outlined text-slate-400">music_note</span></div></div><div class="mt-4 text-[10px] font-mono text-primary uppercase">СИНХРО: БАС (70%)</div></div>
                     </div>
-                </div>
+                </section>
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center bg-gradient-to-r from-transparent to-primary/5"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">all_inclusive</span>Лазерное шоу</h3><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="laser-active" class="sr-only peer"><div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner"></div></label></div>
+                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
+                        <div class="space-y-3"><label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Паттерн</label><div class="grid grid-cols-5 gap-2" id="laser-presets">
+                            <button class="laser-btn aspect-square rounded-lg bg-primary text-white flex items-center justify-center shadow-[0_0_10px_rgba(164,19,236,0.4)] transition-all" data-preset="scan"><span class="material-symbols-outlined text-2xl">radar</span></button>
+                            <button class="laser-btn aspect-square rounded-lg bg-[#161118] text-slate-500 hover:text-primary transition-colors flex items-center justify-center" data-preset="rain"><span class="material-symbols-outlined text-2xl">water_drop</span></button>
+                            <button class="laser-btn aspect-square rounded-lg bg-[#161118] text-slate-500 hover:text-primary transition-colors flex items-center justify-center" data-preset="cross"><span class="material-symbols-outlined text-2xl">close</span></button>
+                            <button class="laser-btn aspect-square rounded-lg bg-[#161118] text-slate-500 hover:text-primary transition-colors flex items-center justify-center" data-preset="cone"><span class="material-symbols-outlined text-2xl">change_history</span></button>
+                            <button class="laser-btn aspect-square rounded-lg bg-[#161118] text-slate-500 hover:text-primary transition-colors flex items-center justify-center" data-preset="random"><span class="material-symbols-outlined text-2xl">grain</span></button>
+                        </div></div>
+                        <div class="bg-[#1c1022] p-4 rounded-xl border border-[#332839] space-y-4">
+                            <div class="flex justify-between items-center"><label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Параметры лучей</label><div class="size-4 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div></div>
+                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 font-bold uppercase">Кол-во лучей</label><span class="text-[10px] text-slate-400 font-mono" id="laser-count-val">24</span></div><input class="w-full h-1" max="100" min="1" type="range" value="24" id="laser-count"/></div>
+                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 font-bold uppercase">Толщина</label><span class="text-[10px] text-slate-400 font-mono" id="laser-thick-val">2.5px</span></div><input class="w-full h-1" max="10" min="1" step="0.5" type="range" value="2.5" id="laser-thickness"/></div>
+                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 font-bold uppercase">Скорость</label><span class="text-[10px] text-slate-400 font-mono" id="laser-speed-val">80%</span></div><input class="w-full h-1" max="100" min="1" type="range" value="80" id="laser-speed"/></div>
+                            <div id="laser-color-preview" class="h-6 bg-primary rounded transition-colors relative cursor-pointer shadow-inner mt-2"><input type="color" id="laser-color" value="#a413ec" class="absolute inset-0 opacity-0 cursor-pointer"></div>
+                        </div>
+                    </div>
+                </section>
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">cloud</span>Атмосфера</h3></div>
+                    <div class="p-6 flex-1 flex flex-col gap-6">
+                        <div class="space-y-4"><div class="flex items-center gap-3"><div class="p-2 bg-[#161118] rounded-lg"><span class="material-symbols-outlined text-slate-400">foggy</span></div><div><h4 class="text-sm font-bold text-white uppercase tracking-wider uppercase">Плотность тумана</h4><p class="text-[8px] text-slate-500 uppercase">Симуляция объемного света</p></div></div>
+                        <input class="w-full h-1" max="100" min="0" type="range" value="65" id="fog-density"/><div class="flex justify-between text-[10px] text-slate-500 font-mono mt-1"><span>ЯСНО</span><span>ДЫМКА</span><span>ГУСТО</span></div></div>
+                        <div class="pt-4 border-t border-[#332839] space-y-4"><div class="flex items-center gap-3"><div class="p-2 bg-[#161118] rounded-lg"><span class="material-symbols-outlined text-slate-400">wb_sunny</span></div><div><h4 class="text-sm font-bold text-white uppercase tracking-wider uppercase">Свечение и Блум</h4><p class="text-[8px] text-slate-500 uppercase">Интенсивность рассеивания света</p></div></div>
+                        <div class="space-y-4 px-2">
+                            <div class="space-y-1"><label class="text-[10px] text-slate-500 uppercase font-bold">Порог</label><input type="range" id="bloom-threshold" class="w-full h-1" value="40"></div>
+                            <div class="space-y-1"><label class="text-[10px] text-slate-500 uppercase font-bold">Радиус</label><input type="range" id="bloom-radius" class="w-full h-1" value="75"></div>
+                            <div class="space-y-1"><label class="text-[10px] text-slate-500 uppercase font-bold">Интенсивность</label><input type="range" id="bloom-intensity" class="w-full h-1" value="90"></div>
+                        </div></div>
+                    </div>
+                </section>
             </div>
 
-        </div>
+            <!-- PANEL: LAYERS (СЛОИ) -->
+            <div id="tab-layers" class="tab-panel">
+                <section class="flex flex-col w-2/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20 relative">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center bg-gradient-to-r from-transparent to-primary/5"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">layers</span>Стек слоев</h3><span class="text-xs text-slate-500 font-mono bg-[#3a2544] px-2 py-1 rounded" id="layer-count-badge">6 АКТИВНЫХ СЛОЕВ</span></div>
+                    <div class="flex-1 overflow-y-auto p-4 space-y-3" id="layer-list"></div>
+                    <div class="p-4 border-t border-[#332839] bg-[#201526] flex gap-3"><button class="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors uppercase text-sm"><span class="material-symbols-outlined">add_circle</span>Добавить слой</button><button class="bg-red-500/10 text-red-500 p-2.5 rounded-lg border border-red-500/20 hover:bg-red-500/20 transition-colors"><span class="material-symbols-outlined">delete</span></button></div>
+                </section>
+                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
+                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">tune</span>Свойства</h3></div>
+                    <div class="p-5 flex-1 overflow-y-auto space-y-6" id="layer-props-panel">
+                        <div class="flex items-start gap-3 pb-4 border-b border-[#332839]">
+                            <div class="size-16 rounded-lg bg-black border border-primary/50 shrink-0 shadow-[0_0_15px_rgba(164,19,236,0.3)] flex items-center justify-center"><span class="material-symbols-outlined text-primary text-3xl">all_inclusive</span></div>
+                            <div><h4 class="font-bold text-white text-lg">Laser Beams</h4><span class="text-xs text-primary font-mono uppercase">ID: LYR-02</span><div class="mt-1 flex gap-2"><span class="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30 uppercase">Генеративный</span></div></div>
+                        </div>
+                        <div class="space-y-2"><label class="text-xs font-bold uppercase tracking-wider text-slate-500">Режим смешивания</label><select class="w-full bg-[#161118] text-white text-sm rounded-lg px-3 py-2 border border-[#332839] appearance-none font-medium"><option>Normal</option><option selected>Add</option><option>Screen</option><option>Multiply</option></select></div>
+                        <div class="space-y-3"><div class="flex justify-between items-center"><label class="text-xs font-bold uppercase tracking-wider text-slate-500">Прозрачность</label><span class="text-xs font-mono bg-primary/20 text-primary px-2 py-0.5 rounded">100%</span></div><input class="w-full h-1" type="range" value="100"/></div>
+                        <div class="grid grid-cols-2 gap-4 pt-2">
+                            <div class="space-y-1"><label class="text-[10px] font-bold uppercase text-slate-500">Масштаб X</label><input class="w-full bg-[#161118] border-none rounded p-1.5 text-xs text-center font-mono" type="number" value="100"/></div>
+                            <div class="space-y-1"><label class="text-[10px] font-bold uppercase text-slate-500">Масштаб Y</label><input class="w-full bg-[#161118] border-none rounded p-1.5 text-xs text-center font-mono" type="number" value="100"/></div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+        </main>
     </div>
 
 <script>
@@ -593,1138 +391,667 @@ class VisualizerApp {
     constructor() {
         this.canvas = document.getElementById('visualizer');
         this.ctx = this.canvas.getContext('2d', { alpha: false, desynchronized: true });
-        this.width = window.innerWidth;
-        this.height = window.innerHeight;
-        
-        // Audio
-        this.audioCtx = null;
-        this.analyser = null;
-        this.source = null;
-        this.dataArray = null;
-        this.bassLevel = 0;
-        this.midLevel = 0;
-        this.trebleLevel = 0;
-        
-        // Assets
-        this.bgImage = null;
-        this.bgVideo = null;
-        this.logoImage = null;
-        this.playlist = [];
-        this.playlistIndex = 0;
-        this.lastSlideTime = 0;
-        
-        // State
-        this.isRunning = false;
-        this.time = 0;
-        this.isMenuOpen = false;
-        this.textState = { x: 0, y: 0, vx: 3, vy: 3 };
-        
-        // Configuration
+        this.width = window.innerWidth; this.height = window.innerHeight;
+        this.audioCtx = null; this.analyser = null; this.source = null; this.dataArray = null; this.bassLevel = 0;
+        this.bgImage = null; this.bgVideo = null; this.logoImage = null;
+        this.isRunning = false; this.time = 0; this.isMenuOpen = true;
         this.config = {
-            theme: 'bar_chill',
-            themeBrightness: 1, // via filter
-            themeHue: 0,
-            gain: 1.5,
-            bassThreshold: 170,
-            
-            // Background
-            bgOpacity: 0.3,
-            bgAnim: { pulse: false, shake: false, rotate: false },
-            playlistEnabled: false,
-            playlistLoop: true,
-            slideDuration: 5,
-            
-            // Content
-            logoSize: 40,
-            text: '',
-            font: 'Inter',
-            textPos: 'center',
-            textSize: 60,
-            anim: {
-                pulseSize: true,
-                pulseGlow: false,
-                shake: false,
-                sway: false,
-                textMode: 'static',
-                textSpeed: 1.0
-            },
-            logoEq: {
-                enabled: false,
-                type: 'circular',
-                strength: 50,
-                borderRadius: 0,
-                padding: 10,
-                barCount: 64,
-                barWidth: 2,
-                closed: true,
-                glow: 0
-            },
-            
-            // Advanced Glitch
-            glitch: {
-                enabled: false,
-                rgbAmount: 0,
-                rgbChaos: false,
-                rgbMode: 'pattern', // pattern, horizontal, vertical
-                noiseAmount: 0,
-                sliceAmount: 0,
-                sliceDir: 'hor', // hor, ver, mix
-                sliceSpeed: 10,
-                blockAmount: 0,
-                invert: false,
-                zoom: false
-            },
-            
-            strobe: { active: false, color: '#ffffff', speed: 15, reactivity: 0.5, lastFlash: 0 },
-            laser: { active: false, preset: 'scan', color: '#00ff00', count: 10 },
+            theme: 'cyber_punk', themeHue: 0, gain: 1.5, bassThreshold: 170,
+            brightness: 80, bloom: { threshold: 40, radius: 75, intensity: 90 },
+            bg: { opacity: 0.3, pulse: false, shake: false, spin: false },
+            playlist: { enabled: false, duration: 10, loop: true, items: [], index: 0, lastSwitch: 0 },
+            logo: { size: 40, fx: { pulseSize: false, pulseGlow: false, shake: false, sway: false }, eq: { enabled: false, type: 'circular', strength: 1.2, padding: 20, radius: 5, bars: 64, width: 2, closed: true, glow: 50 } },
+            text: { content: '', font: 'Space Grotesk', pos: 'center', anim: 'static', speed: 50 },
+            glitch: { enabled: true, rgbAmount: 12, rgbIntensity: 45, rgbChaos: false, rgbMode: 'pattern', noiseAmount: 15, colorNoise: 80, blockAmount: 64, scatterRandom: false, scatterRange: 10, invert: false, zoom: true, sliceDensity: 8, sliceShift: 22 },
+            strobe: { active: true, color: '#a413ec', speed: 12, pulseWidth: 45, lastFlash: 0 },
+            laser: { active: false, preset: 'scan', color: '#a413ec', count: 24, thickness: 2.5, speed: 80 },
+            fog: 65,
             layerOrder: ['background', 'visuals', 'logo', 'text', 'lasers', 'glitch']
         };
-
+        this.selectedLayer = 'visuals';
         this.init();
     }
-
     init() {
-        this.resize();
-        window.addEventListener('resize', () => this.resize());
-        
-        // Menu Toggling
-        const toggleMenu = () => {
-            const panel = document.getElementById('controls');
-            this.isMenuOpen = !this.isMenuOpen;
-            if(this.isMenuOpen) panel.classList.add('active');
-            else panel.classList.remove('active');
-        };
-
-        // Key Listener (Q)
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'q' || e.key === 'Q' || e.code === 'KeyQ') toggleMenu();
-        });
-
-        // Click Listener (Canvas only)
-        this.canvas.addEventListener('click', (e) => {
-            // Prevent accidental toggling if interacting with something else (rare in canvas)
-            toggleMenu();
-        });
-
-        // Themes
+        this.resize(); window.addEventListener('resize', () => this.resize());
+        window.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'q') this.toggleMenu(); });
+        this.canvas.addEventListener('click', () => this.toggleMenu());
+        document.getElementById('close-console').onclick = () => this.toggleMenu();
         this.themes = this.getThemes();
-        this.populateUI();
-        this.attachListeners();
-        this.setupTabs();
-
+        this.populateUI(); this.attachListeners(); this.setupTabs();
         document.getElementById('start-overlay').addEventListener('click', () => {
-            this.startAudio();
-            document.getElementById('start-overlay').style.display = 'none';
+            this.startAudio(); document.getElementById('start-overlay').style.display = 'none';
         });
     }
-
-    resize() {
-        this.width = window.innerWidth;
-        this.height = window.innerHeight;
-        this.canvas.width = this.width;
-        this.canvas.height = this.height;
+    toggleMenu() {
+        const ui = document.getElementById('console-ui');
+        this.isMenuOpen = !this.isMenuOpen;
+        if(this.isMenuOpen) {
+            ui.classList.add('active');
+            ui.style.pointerEvents = 'auto';
+        } else {
+            ui.classList.remove('active');
+            ui.style.pointerEvents = 'none';
+        }
     }
-
+    resize() { this.width = window.innerWidth; this.height = window.innerHeight; this.canvas.width = this.width; this.canvas.height = this.height; }
     async startAudio() {
         try {
             this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            this.analyser = this.audioCtx.createAnalyser();
-            this.analyser.fftSize = 2048; 
-            this.analyser.smoothingTimeConstant = 0.85;
-            
-            this.source = this.audioCtx.createMediaStreamSource(stream);
-            this.source.connect(this.analyser);
-            
-            const bufferLength = this.analyser.frequencyBinCount;
-            this.dataArray = new Uint8Array(bufferLength);
-            
-            this.isRunning = true;
-            this.animate();
-        } catch (err) {
-            alert("Error: " + err);
-        }
+            this.analyser = this.audioCtx.createAnalyser(); this.analyser.fftSize = 2048;
+            this.source = this.audioCtx.createMediaStreamSource(stream); this.source.connect(this.analyser);
+            this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+            this.isRunning = true; this.animate();
+        } catch (err) { console.error(err); }
     }
-
     analyzeAudio() {
-        if (!this.analyser) return;
-        this.analyser.getByteFrequencyData(this.dataArray);
-        
-        let bassSum = 0, midSum = 0;
-        for(let i=0; i<10; i++) bassSum += this.dataArray[i];
-        for(let i=10; i<100; i++) midSum += this.dataArray[i];
-        
-        const g = this.config.gain;
-        this.bassLevel = Math.min((bassSum / 10) * g, 255);
-        this.midLevel = Math.min((midSum / 90) * g, 255);
+        if (!this.analyser) return; this.analyser.getByteFrequencyData(this.dataArray);
+        let bassSum = 0; for(let i=0; i<10; i++) bassSum += this.dataArray[i];
+        this.bassLevel = Math.min((bassSum / 10) * this.config.gain, 255);
     }
-
     getThemes() {
         return {
-            'bar': {
-                name: "Bar / Chill",
-                presets: {
-                    'bar_chill': { name: "Warm Ambient", type: 'gradient_flow', color: [255, 150, 50] },
-                    'bar_jazz': { name: "Jazz Waves", type: 'smooth_wave', color: [100, 100, 255] },
-                    'bar_neon': { name: "Neon Sign", type: 'bars_classic', color: [0, 255, 255] }
-                }
-            },
-            'club': {
-                name: "Club / Dance",
-                presets: {
-                    'club_tunnel': { name: "Hyper Tunnel", type: 'tunnel', color: [255, 0, 255] },
-                    'club_matrix': { name: "Matrix Rain", type: 'matrix_rain', color: [0, 255, 0] },
-                    'club_bass': { name: "Bass Cannon", type: 'center_burst', color: [255, 0, 0] }
-                }
-            },
-            'concert': {
-                name: "Concert / Epic",
-                presets: {
-                    'con_stage': { name: "Stage Lights", type: 'spotlights', color: [255, 255, 200] },
-                    'con_epic': { name: "Epic EQ", type: 'bars_mirror', color: [255, 215, 0] }
-                }
-            },
-            'cyber': {
-                name: "Cyber / Future",
-                presets: {
-                    'cyber_punk': { name: "Neon City", type: 'double_eq', color: [255, 0, 80] },
-                    'cyber_grid': { name: "Grid Run", type: 'grid_pulse', color: [0, 255, 255] },
-                    'cyber_circle': { name: "Cyber Circle", type: 'circular_bars_main', color: [200, 0, 255] }
-                }
-            },
-            'space': {
-                name: "Space / Void",
-                presets: {
-                    'space_stars': { name: "Starfield", type: 'particles_move', color: [255, 255, 255] },
-                    'space_nebula': { name: "Nebula Flow", type: 'gradient_flow', color: [150, 50, 255] }
-                }
-            }
+            'bar': { name: "Bar / Chill", icon: 'local_bar', presets: { 'bar_chill': { name: "Warm Flow" }, 'bar_neon': { name: "Neon Bars" } } },
+            'club': { name: "Club / Dance", icon: 'nightlife', presets: { 'club_tunnel': { name: "Hyper Tunnel" }, 'club_bass': { name: "Bass Cannon" } } },
+            'concert': { name: "Concert / Epic", icon: 'stadium', presets: { 'concert_city': { name: "Neon City" }, 'concert_stage': { name: "Epic Stage" } } },
+            'cyber': { name: "Cyber / Future", icon: 'memory', presets: { 'cyber_punk': { name: "Neon Pulse" }, 'cyber_grid': { name: "Cyber Grid" } } },
+            'space': { name: "Space / Void", icon: 'rocket_launch', presets: { 'space_void': { name: "Starfield" } } }
         };
     }
-
     renderBackground() {
-        const bassTrigger = this.bassLevel > this.config.bassThreshold;
-        let media = null;
-
-        if (this.config.playlistEnabled && this.playlist.length > 0) {
+        if (this.config.playlist.enabled && this.config.playlist.items.length > 0) {
             const now = Date.now();
-            if (now - this.lastSlideTime > this.config.slideDuration * 1000) {
-                this.playlistIndex++;
-                if (this.playlistIndex >= this.playlist.length) {
-                    if (this.config.playlistLoop) {
-                        this.playlistIndex = 0;
-                    } else {
-                        this.playlistIndex = this.playlist.length - 1;
-                    }
-                }
-                this.lastSlideTime = now;
-                // Manage video playback
-                this.playlist.forEach((item, idx) => {
-                    if (item.type === 'video') {
-                        if (idx === this.playlistIndex) item.element.play();
-                        else item.element.pause();
-                    }
-                });
+            if (now - this.config.playlist.lastSwitch > this.config.playlist.duration * 1000) {
+                this.config.playlist.index = (this.config.playlist.index + 1) % this.config.playlist.items.length;
+                const item = this.config.playlist.items[this.config.playlist.index];
+                if (item.type === 'video') { this.bgVideo = item.el; this.bgImage = null; }
+                else { this.bgImage = item.el; this.bgVideo = null; }
+                this.config.playlist.lastSwitch = now;
             }
-            media = this.playlist[this.playlistIndex].element;
-        } else {
-            media = this.bgVideo || this.bgImage;
         }
-
+        let media = this.bgVideo || this.bgImage;
         if (media) {
-            const isVideo = media.tagName === 'VIDEO';
-            const mw = isVideo ? media.videoWidth : media.width;
-            const mh = isVideo ? media.videoHeight : media.height;
-
-            if (mw && mh) {
-                this.ctx.save();
-                const cx = this.width / 2;
-                const cy = this.height / 2;
-                
-                // BG FX Transform
-                let scale = Math.max(this.width / mw, this.height / mh);
-                let tx = cx, ty = cy;
-                let rot = 0;
-
-                if (this.config.bgAnim.pulse && bassTrigger) scale *= 1.05;
-                if (this.config.bgAnim.shake && bassTrigger) {
-                    tx += (Math.random()-0.5) * 20;
-                    ty += (Math.random()-0.5) * 20;
-                }
-                if (this.config.bgAnim.rotate) {
-                    rot = this.time * 0.002;
-                }
-
-                this.ctx.translate(tx, ty);
-                this.ctx.rotate(rot);
-                this.ctx.scale(scale, scale);
-                
-                this.ctx.globalAlpha = this.config.bgOpacity;
-                this.ctx.drawImage(media, -mw/2, -mh/2, mw, mh);
-                this.ctx.restore();
-            }
+            this.ctx.save(); this.ctx.globalAlpha = this.config.bg.opacity;
+            let scaleMult = 1;
+            if (this.config.bg.pulse && this.bassLevel > this.config.bassThreshold) scaleMult = 1.05;
+            const mw = media.tagName === 'VIDEO' ? media.videoWidth : media.width;
+            const mh = media.tagName === 'VIDEO' ? media.videoHeight : media.height;
+            const scale = Math.max(this.width / mw, this.height / mh) * scaleMult;
+            this.ctx.translate(this.width/2, this.height/2);
+            if (this.config.bg.spin) this.ctx.rotate(this.time * 0.01);
+            if (this.config.bg.shake && this.bassLevel > this.config.bassThreshold) this.ctx.translate(Math.random()*10-5, Math.random()*10-5);
+            this.ctx.scale(scale, scale);
+            this.ctx.drawImage(media, -mw/2, -mh/2, mw, mh); this.ctx.restore();
         }
     }
-
     renderVisuals() {
-        let presetData = null;
-        for(let c in this.themes) {
-            if(this.themes[c].presets[this.config.theme]) {
-                presetData = this.themes[c].presets[this.config.theme];
+        this.ctx.save();
+        const hue = this.config.themeHue;
+        const isBeat = this.bassLevel > this.config.bassThreshold;
+
+        switch(this.config.theme) {
+            case 'cyber_punk': // Neon Pulse
+                const barW = this.width / 64;
+                for(let i=0; i<64; i++) {
+                    const val = this.dataArray[i*2];
+                    const h = (val / 255) * this.height * 0.6;
+                    const opacity = 0.5 + (val / 510);
+                    this.ctx.fillStyle = `hsla(${hue + i*2}, 80%, 60%, ${opacity})`;
+                    this.ctx.shadowBlur = isBeat ? 20 : 5;
+                    this.ctx.shadowColor = `hsl(${hue + i*2}, 80%, 60%)`;
+                    this.ctx.fillRect(i * barW, this.height/2 - h/2, barW - 4, h);
+                }
                 break;
-            }
-        }
-        if(!presetData) return;
 
-        // Apply Theme Hue
-        const baseColor = presetData.color;
-        let colorStr;
-        if(this.config.themeHue > 0) colorStr = `hsl(${this.config.themeHue}, 70%, 50%)`;
-        else colorStr = `rgb(${baseColor[0]},${baseColor[1]},${baseColor[2]})`;
+            case 'cyber_grid':
+                this.ctx.strokeStyle = `hsla(${hue}, 80%, 50%, 0.3)`;
+                this.ctx.lineWidth = 1;
+                const gridSpacing = 50 + (isBeat ? 10 : 0);
+                for(let x=0; x<this.width; x+=gridSpacing) {
+                    this.ctx.beginPath(); this.ctx.moveTo(x, 0); this.ctx.lineTo(x, this.height); this.ctx.stroke();
+                }
+                for(let y=0; y<this.height; y+=gridSpacing) {
+                    this.ctx.beginPath(); this.ctx.moveTo(0, y); this.ctx.lineTo(this.width, y); this.ctx.stroke();
+                }
+                // Perspective lines
+                this.ctx.strokeStyle = `hsla(${hue}, 80%, 50%, 0.5)`;
+                for(let i=0; i<12; i++) {
+                    const angle = (i/12) * Math.PI * 2;
+                    this.ctx.beginPath(); this.ctx.moveTo(this.width/2, this.height/2);
+                    const r = Math.max(this.width, this.height) * (0.5 + (this.dataArray[i*10]/510));
+                    this.ctx.lineTo(this.width/2 + Math.cos(angle)*r, this.height/2 + Math.sin(angle)*r);
+                    this.ctx.stroke();
+                }
+                break;
 
-        this.ctx.fillStyle = colorStr;
-        this.ctx.strokeStyle = colorStr;
-        this.ctx.shadowBlur = 10;
-        this.ctx.shadowColor = colorStr;
-
-        // --- Simplified Rendering Logic for Demo ---
-        const type = presetData.type;
-        const cx = this.width/2, cy = this.height/2;
-        const bass = this.bassLevel;
-        
-        if (type === 'bars_classic' || type === 'bars_mirror') {
-             const barW = (this.width / 64);
-             for(let i=0; i<64; i++) {
-                 const h = (this.dataArray[i] / 255) * (this.height * 0.6);
-                 if(type === 'bars_mirror') {
-                     this.ctx.fillRect(cx + i*barW, cy - h/2, barW-1, h);
-                     this.ctx.fillRect(cx - i*barW, cy - h/2, barW-1, h);
-                 } else {
-                     this.ctx.fillRect(i * barW * 2, this.height - h, barW * 2 - 2, h);
-                 }
-             }
-        }
-        else if (type === 'double_eq') {
-            const barW = (this.width / 128);
-            for(let i=0; i<128; i++) {
-                const h = (this.dataArray[i] / 255) * (this.height * 0.4);
-                this.ctx.fillRect(i * barW, 0, barW-1, h);
-                this.ctx.fillRect(i * barW, this.height - h, barW-1, h);
-            }
-        }
-        else if (type === 'tunnel' || type === 'center_burst') {
-            const r = 50 + (bass * 0.5);
-            this.ctx.beginPath(); this.ctx.arc(cx, cy, r, 0, Math.PI*2); this.ctx.stroke();
-            this.ctx.beginPath(); this.ctx.arc(cx, cy, r*1.5, 0, Math.PI*2); this.ctx.stroke();
-            if(type === 'center_burst' && bass > 200) {
+            case 'club_tunnel':
+                this.ctx.translate(this.width/2, this.height/2);
                 for(let i=0; i<8; i++) {
-                    const angle = (i/8) * Math.PI * 2;
-                    this.ctx.moveTo(cx, cy);
-                    this.ctx.lineTo(cx + Math.cos(angle)*this.width, cy + Math.sin(angle)*this.width);
+                    const r = ((this.time * 2 + i * 100) % 800);
+                    const val = this.dataArray[i*15];
+                    const beatScale = isBeat ? 1.2 : 1.0;
+                    this.ctx.strokeStyle = `hsla(${hue + i*20}, 80%, 50%, ${1 - r/800})`;
+                    this.ctx.lineWidth = 5 + (val/50);
+                    this.ctx.beginPath();
+                    this.ctx.arc(0, 0, r * beatScale, 0, Math.PI * 2);
+                    this.ctx.stroke();
                 }
-                this.ctx.stroke();
-            }
-        }
-        else if (type === 'grid_pulse') {
-            const size = 50;
-            const cols = Math.ceil(this.width / size);
-            const rows = Math.ceil(this.height / size);
-            for(let x=0; x<cols; x++) {
-                for(let y=0; y<rows; y++) {
-                    const dist = Math.sqrt((x*size-cx)**2 + (y*size-cy)**2);
-                    const v = this.dataArray[Math.floor(dist/10)%128];
-                    const op = v / 255;
-                    this.ctx.globalAlpha = op;
-                    this.ctx.strokeRect(x*size, y*size, size-2, size-2);
-                }
-            }
-            this.ctx.globalAlpha = 1;
-        }
-        else if (type === 'particles_move') {
-            if(!this.particles) {
-                this.particles = Array.from({length: 100}, () => ({
-                    x: Math.random() * this.width,
-                    y: Math.random() * this.height,
-                    s: Math.random() * 2 + 1,
-                    v: Math.random() * 0.5 + 0.1
-                }));
-            }
-            this.ctx.fillStyle = colorStr;
-            this.particles.forEach((p, i) => {
-                const freq = this.dataArray[i % 128] / 255;
-                p.y -= p.v * (1 + freq * 10);
-                if(p.y < 0) p.y = this.height;
+                break;
+
+            case 'bar_chill': // Warm Flow
                 this.ctx.beginPath();
-                this.ctx.arc(p.x, p.y, p.s + freq * 5, 0, Math.PI*2);
+                this.ctx.moveTo(0, this.height);
+                for(let i=0; i<128; i++) {
+                    const val = this.dataArray[i];
+                    const x = (i/127) * this.width;
+                    const y = this.height/2 + Math.sin(i*0.1 + this.time*0.02) * (val * 0.5);
+                    this.ctx.lineTo(x, y);
+                }
+                this.ctx.lineTo(this.width, this.height);
+                const grad = this.ctx.createLinearGradient(0, this.height/2, 0, this.height);
+                grad.addColorStop(0, `hsla(${hue}, 70%, 50%, 0.6)`);
+                grad.addColorStop(1, `hsla(${hue + 40}, 70%, 30%, 0)`);
+                this.ctx.fillStyle = grad;
                 this.ctx.fill();
-            });
+                break;
+
+            case 'space_void': // Starfield
+                for(let i=0; i<50; i++) {
+                    const x = (Math.sin(i + this.time*0.01) * this.width * 0.5) + this.width/2;
+                    const y = (Math.cos(i * 1.5 + this.time*0.005) * this.height * 0.5) + this.height/2;
+                    const s = (this.dataArray[i % 128] / 255) * 5;
+                    this.ctx.fillStyle = `white`;
+                    this.ctx.beginPath(); this.ctx.arc(x, y, s, 0, Math.PI*2); this.ctx.fill();
+                }
+                break;
+
+            case 'bar_neon':
+                const step = this.width / 40;
+                for(let i=0; i<40; i++) {
+                    const h = (this.dataArray[i*3] / 255) * this.height * 0.5;
+                    this.ctx.fillStyle = `hsl(${hue + i*5}, 100%, 50%)`;
+                    this.ctx.shadowBlur = 15;
+                    this.ctx.shadowColor = `hsl(${hue + i*5}, 100%, 50%)`;
+                    this.ctx.fillRect(i*step, this.height - h, step-10, 5);
+                }
+                break;
+
+            case 'club_bass':
+                this.ctx.translate(this.width/2, this.height/2);
+                if(isBeat) this.ctx.scale(1.1, 1.1);
+                for(let i=0; i<4; i++) {
+                    const r = (this.dataArray[i*10]/255) * 200 + 100;
+                    this.ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
+                    this.ctx.lineWidth = 10;
+                    this.ctx.beginPath();
+                    this.ctx.arc(0, 0, r + i*30, 0, Math.PI*2);
+                    this.ctx.stroke();
+                }
+                break;
+
+            case 'concert_city':
+                for(let i=0; i<20; i++) {
+                    const h = (this.dataArray[i*5]/255) * this.height * 0.8;
+                    const w = this.width / 20;
+                    this.ctx.fillStyle = `hsla(${hue}, 50%, 20%, 0.5)`;
+                    this.ctx.fillRect(i*w, this.height - h, w-5, h);
+                    this.ctx.fillStyle = `hsla(${hue}, 100%, 70%, 0.8)`;
+                    this.ctx.fillRect(i*w, this.height - h, w-5, 10);
+                }
+                break;
+
+            case 'concert_stage':
+                this.ctx.translate(this.width/2, 0);
+                for(let i=0; i<10; i++) {
+                    const angle = (i/9) * Math.PI - Math.PI;
+                    const len = Math.max(this.width, this.height);
+                    const val = this.dataArray[i*10];
+                    this.ctx.strokeStyle = `hsla(${hue}, 100%, 50%, ${val/255})`;
+                    this.ctx.lineWidth = 20;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0,0);
+                    this.ctx.lineTo(Math.cos(angle)*len, Math.sin(angle)*len);
+                    this.ctx.stroke();
+                }
+                break;
+
+            default:
+                const bW = this.width / 128;
+                this.ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+                for(let i=0; i<128; i++) {
+                    const h = (this.dataArray[i] / 255) * this.height * 0.4;
+                    this.ctx.fillRect(i * bW, this.height - h, bW - 1, h);
+                }
         }
-        else if (type === 'circular_bars_main') {
-            const radius = Math.min(this.width, this.height) * 0.3 + (bass * 0.1);
-            const bins = 128;
-            for (let i = 0; i < bins; i++) {
-                const angle = (i / bins) * Math.PI * 2;
-                const val = (this.dataArray[i % 128] / 255) * 150;
-                const x1 = cx + Math.cos(angle) * radius;
-                const y1 = cy + Math.sin(angle) * radius;
-                const x2 = cx + Math.cos(angle) * (radius + val);
-                const y2 = cy + Math.sin(angle) * (radius + val);
+        this.ctx.restore();
+    }
+    renderLogo() {
+        if (!this.logoImage) return;
+        this.ctx.save();
+        let scale = (this.config.logo.size / 100);
+        const isBeat = this.bassLevel > this.config.bassThreshold;
+        if (this.config.logo.fx.pulseSize && isBeat) scale *= 1.1;
+        this.ctx.translate(this.width/2, this.height/2);
+        if (this.config.logo.fx.sway) this.ctx.rotate(Math.sin(this.time * 0.05) * 0.1);
+        if (this.config.logo.fx.shake && isBeat) this.ctx.translate(Math.random()*10-5, Math.random()*10-5);
+
+        const lw = this.logoImage.width * scale; const lh = this.logoImage.height * scale;
+        if (this.config.logo.fx.pulseGlow && isBeat) {
+            this.ctx.shadowBlur = this.config.logo.eq.glow;
+            this.ctx.shadowColor = `hsl(${this.config.themeHue}, 100%, 50%)`;
+        }
+
+        this.ctx.drawImage(this.logoImage, -lw/2, -lh/2, lw, lh);
+
+        if (this.config.logo.eq.enabled) {
+            this.renderLogoEq(lw, lh, isBeat);
+        }
+        this.ctx.restore();
+    }
+    renderLogoEq(lw, lh, isBeat) {
+        this.ctx.strokeStyle = `hsl(${this.config.themeHue}, 100%, 50%)`;
+        this.ctx.lineWidth = this.config.logo.eq.width;
+        const radius = (Math.max(lw, lh) / 2) + this.config.logo.eq.padding;
+        const bars = this.config.logo.eq.bars;
+        const type = this.config.logo.eq.type;
+
+        if (type === 'circular') {
+            this.ctx.beginPath();
+            for(let i=0; i<bars; i++) {
+                const angle = (i / bars) * Math.PI * 2;
+                const val = this.dataArray[Math.floor((i/bars)*128)];
+                const strength = (val / 255) * 50 * this.config.logo.eq.strength;
+                const r = radius + strength;
+                const x = Math.cos(angle) * r; const y = Math.sin(angle) * r;
+                if (i === 0) this.ctx.moveTo(x, y); else this.ctx.lineTo(x, y);
+            }
+            if (this.config.logo.eq.closed) this.ctx.closePath();
+            this.ctx.stroke();
+        } else if (type === 'square') {
+            const r = radius + (isBeat ? 10 : 0);
+            const side = r * 2;
+            const rad = this.config.logo.eq.radius;
+            this.ctx.beginPath();
+            this.ctx.roundRect(-side/2, -side/2, side, side, rad);
+            this.ctx.stroke();
+        } else if (type === 'hexagon') {
+            this.ctx.beginPath();
+            for(let i=0; i<6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                const r = radius + (isBeat ? 20 : 0);
+                const x = Math.cos(angle) * r; const y = Math.sin(angle) * r;
+                if (i === 0) this.ctx.moveTo(x, y); else this.ctx.lineTo(x, y);
+            }
+            this.ctx.closePath(); this.ctx.stroke();
+        } else if (type === 'sidebars') {
+            const h = lh * 0.8;
+            for(let i=0; i<20; i++) {
+                const val = this.dataArray[i*2];
+                const barH = (val/255) * h;
+                this.ctx.fillStyle = `hsl(${this.config.themeHue}, 80%, 50%)`;
+                this.ctx.fillRect(-lw/2 - 20 - i*5, -barH/2, 3, barH);
+                this.ctx.fillRect(lw/2 + 20 + i*5, -barH/2, 3, barH);
+            }
+        } else if (type === 'particles') {
+            for(let i=0; i<bars; i++) {
+                const angle = (i/bars) * Math.PI * 2 + (this.time * 0.01);
+                const val = this.dataArray[i % 128];
+                const r = radius + (val/255) * 100;
+                this.ctx.fillStyle = `white`;
                 this.ctx.beginPath();
-                this.ctx.moveTo(x1, y1);
-                this.ctx.lineTo(x2, y2);
+                this.ctx.arc(Math.cos(angle)*r, Math.sin(angle)*r, 2, 0, Math.PI*2);
+                this.ctx.fill();
+            }
+        }
+    }
+    renderText() {
+        if (!this.config.text.content) return;
+        this.ctx.save(); this.ctx.font = `bold 48px ${this.config.text.font}`; this.ctx.fillStyle = '#fff'; this.ctx.textAlign = 'center';
+        let x = this.width / 2; let y = this.height / 2;
+        if (this.config.text.pos === 'top') y = 100;
+        if (this.config.text.pos === 'bottom') y = this.height - 100;
+        const isBeat = this.bassLevel > this.config.bassThreshold;
+        if (this.config.text.anim === 'pulse' && isBeat) { this.ctx.translate(x, y); this.ctx.scale(1.2, 1.2); x = 0; y = 0; }
+        else if (this.config.text.anim === 'floating') { y += Math.sin(this.time * 0.05) * 20; }
+        else if (this.config.text.anim === 'ping') { x = (this.width / 2) + Math.sin(this.time * 0.02) * (this.width / 3); }
+        this.ctx.fillText(this.config.text.content, x, y); this.ctx.restore();
+    }
+    renderGlitch() {
+        if (!this.config.glitch.enabled) return;
+        const isBeat = this.bassLevel > this.config.bassThreshold;
+        if (isBeat && this.config.glitch.zoom) {
+            const z = 1.02;
+            this.ctx.drawImage(this.canvas, -this.width*(z-1)/2, -this.height*(z-1)/2, this.width * z, this.height * z);
+        }
+        if (isBeat && this.config.glitch.rgbAmount > 0) {
+            const amt = this.config.glitch.rgbAmount;
+            const offset = amt * (this.config.glitch.rgbChaos ? (Math.random()*2-1) : 1);
+            this.ctx.save(); this.ctx.globalCompositeOperation = 'screen';
+            this.ctx.globalAlpha = this.config.glitch.rgbIntensity / 100;
+            if (this.config.glitch.rgbMode === 'horizontal') this.ctx.drawImage(this.canvas, offset, 0);
+            else if (this.config.glitch.rgbMode === 'vertical') this.ctx.drawImage(this.canvas, 0, offset);
+            else this.ctx.drawImage(this.canvas, offset, offset);
+            this.ctx.restore();
+        }
+        if (isBeat && this.config.glitch.sliceDensity > 0) {
+            const density = this.config.glitch.sliceDensity;
+            const shiftAmt = this.config.glitch.sliceShift;
+            const h = this.height / density;
+            for(let i=0; i<density; i++) {
+                const shift = (Math.random()-0.5) * shiftAmt * 2;
+                this.ctx.drawImage(this.canvas, 0, i*h, this.width, h, shift, i*h, this.width, h);
+            }
+        }
+        if (isBeat && this.config.glitch.scatterRandom) {
+            const size = this.config.glitch.blockAmount;
+            for(let i=0; i<10; i++) {
+                const x = Math.random() * this.width; const y = Math.random() * this.height;
+                const dist = this.config.glitch.scatterRange;
+                this.ctx.drawImage(this.canvas, x, y, size, size, x + (Math.random()-0.5)*dist, y + (Math.random()-0.5)*dist, size, size);
+            }
+        }
+        if (this.config.glitch.noiseAmount > 0 && Math.random() < (this.config.glitch.noiseAmount / 100)) {
+            this.ctx.fillStyle = `rgba(255,255,255,0.1)`;
+            for(let i=0; i<5; i++) this.ctx.fillRect(0, Math.random()*this.height, this.width, 2);
+        }
+        if (isBeat && this.config.glitch.invert) { this.ctx.save(); this.ctx.globalCompositeOperation = 'difference'; this.ctx.fillStyle = 'white'; this.ctx.fillRect(0,0,this.width, this.height); this.ctx.restore(); }
+    }
+    renderLasers() {
+        if (!this.config.laser.active) return;
+        this.ctx.save();
+        this.ctx.strokeStyle = this.config.laser.color;
+        this.ctx.lineWidth = this.config.laser.thickness;
+        this.ctx.globalAlpha = 0.5;
+        const count = this.config.laser.count;
+        const speed = this.config.laser.speed / 100;
+        const preset = this.config.laser.preset;
+
+        if (preset === 'scan') {
+            this.ctx.translate(this.width/2, this.height/2);
+            for(let i=0; i<count; i++) {
+                const angle = (this.time * speed * 0.05) + (i / count) * Math.PI * 2;
+                this.ctx.beginPath(); this.ctx.moveTo(0, 0);
+                this.ctx.lineTo(Math.cos(angle) * this.width, Math.sin(angle) * this.height);
+                this.ctx.stroke();
+            }
+        } else if (preset === 'rain') {
+            for(let i=0; i<count; i++) {
+                const x = (i/count) * this.width;
+                const val = this.dataArray[Math.floor((i/count)*128)];
+                this.ctx.beginPath(); this.ctx.moveTo(x, 0);
+                this.ctx.lineTo(x + Math.sin(this.time*0.02)*100, (val/255)*this.height);
+                this.ctx.stroke();
+            }
+        } else if (preset === 'cross') {
+            for(let i=0; i<count/2; i++) {
+                const y = (i/(count/2)) * this.height;
+                const val = this.dataArray[i*2];
+                this.ctx.beginPath(); this.ctx.moveTo(0, y); this.ctx.lineTo(this.width, y + Math.sin(this.time*0.05)*100); this.ctx.stroke();
+                this.ctx.beginPath(); this.ctx.moveTo(this.width, y); this.ctx.lineTo(0, y + Math.cos(this.time*0.05)*100); this.ctx.stroke();
+            }
+        } else {
+            this.ctx.translate(this.width/2, this.height/2);
+            for(let i=0; i<count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                this.ctx.beginPath(); this.ctx.moveTo(0,0);
+                this.ctx.lineTo(Math.cos(angle)*this.width, Math.sin(angle)*this.height);
                 this.ctx.stroke();
             }
         }
-        else if (type === 'matrix_rain') {
-             const fontSize = 16;
-             const columns = Math.floor(this.width / fontSize);
-             if(!this.matrixDrops) this.matrixDrops = Array(columns).fill(1);
-             
-             this.ctx.font = fontSize + "px monospace";
-             for(let i=0; i<this.matrixDrops.length; i++) {
-                 const v = this.dataArray[i % 128] / 255;
-                 const text = String.fromCharCode(0x30A0 + Math.random() * 33);
-                 this.ctx.fillText(text, i * fontSize, this.matrixDrops[i] * fontSize);
-                 
-                 if(this.matrixDrops[i] * fontSize > this.height && Math.random() > 0.975)
-                     this.matrixDrops[i] = 0;
-                 
-                 this.matrixDrops[i] += (0.5 + v * 2);
-             }
-        }
-        else {
-             // Generic wave
-             this.ctx.beginPath();
-             for(let i=0; i<this.width; i+=20) {
-                 const v = this.dataArray[i%100];
-                 const y = cy + Math.sin(i*0.01 + this.time*0.1) * v;
-                 this.ctx.lineTo(i,y);
-             }
-             this.ctx.stroke();
-        }
-        this.ctx.shadowBlur = 0;
-    }
-
-    renderLogo() {
-        const cx = this.width / 2, cy = this.height / 2;
-        let x = cx, y = cy;
-        const anim = this.config.anim;
-        const bassTrigger = this.bassLevel > this.config.bassThreshold;
-
-        if (anim.shake && bassTrigger) {
-            x += (Math.random() - 0.5) * 30;
-            y += (Math.random() - 0.5) * 30;
-        }
-        if (anim.sway) x += Math.sin(this.time * 0.05) * 20;
-
-        this.ctx.save();
-        this.ctx.translate(x, y);
-
-        if (anim.pulseSize) {
-            const s = 1 + (this.bassLevel / 255) * 0.4;
-            this.ctx.scale(s, s);
-        }
-
-        // Logo Equalizer
-        if (this.config.logoEq.enabled && this.dataArray) {
-            const eq = this.config.logoEq;
-            const h = (this.height * (this.config.logoSize / 100));
-            const w = h * (this.logoImage ? (this.logoImage.width / this.logoImage.height) : 1);
-            const strength = eq.strength / 50;
-            const bins = Math.min(eq.barCount, this.dataArray.length);
-            const step = Math.floor(this.dataArray.length / bins);
-            const padding = eq.padding;
-            const barW = eq.barWidth;
-            
-            this.ctx.save();
-            let eqColor;
-            if(this.config.themeHue > 0) eqColor = `hsl(${this.config.themeHue}, 80%, 60%)`;
-            else eqColor = 'white';
-            
-            this.ctx.strokeStyle = eqColor;
-            this.ctx.fillStyle = eqColor;
-            this.ctx.lineWidth = barW;
-
-            if (eq.glow > 0) {
-                this.ctx.shadowBlur = eq.glow;
-                this.ctx.shadowColor = eqColor;
-            }
-
-            if (eq.type === 'circular') {
-                const radius = Math.max(w, h) / 2 + padding;
-                for (let i = 0; i < bins; i++) {
-                    const angle = (i / bins) * Math.PI * 2;
-                    const val = (this.dataArray[i * step] / 255) * 60 * strength;
-                    const x1 = Math.cos(angle) * radius;
-                    const y1 = Math.sin(angle) * radius;
-                    const x2 = Math.cos(angle) * (radius + val);
-                    const y2 = Math.sin(angle) * (radius + val);
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(x1, y1);
-                    this.ctx.lineTo(x2, y2);
-                    this.ctx.stroke();
-                }
-                if (eq.closed) {
-                    this.ctx.beginPath();
-                    this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                }
-            } else if (eq.type === 'square') {
-                const rectW = w + padding * 2;
-                const rectH = h + padding * 2;
-                const r = eq.borderRadius;
-                
-                // Draw bars on 4 sides
-                for(let i=0; i<bins; i++) {
-                    const val = (this.dataArray[i * step] / 255) * 40 * strength;
-                    const side = Math.floor(i / (bins/4));
-                    const pos = (i % (bins/4)) / (bins/4);
-                    
-                    let bx1, by1, bx2, by2;
-                    if(side === 0) { // Top
-                        bx1 = -rectW/2 + pos * rectW; by1 = -rectH/2;
-                        bx2 = bx1; by2 = by1 - val;
-                    } else if (side === 1) { // Right
-                        bx1 = rectW/2; by1 = -rectH/2 + pos * rectH;
-                        bx2 = bx1 + val; by2 = by1;
-                    } else if (side === 2) { // Bottom
-                        bx1 = rectW/2 - pos * rectW; by1 = rectH/2;
-                        bx2 = bx1; by2 = by1 + val;
-                    } else { // Left
-                        bx1 = -rectW/2; by1 = rectH/2 - pos * rectH;
-                        bx2 = bx1 - val; by2 = by1;
-                    }
-                    
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(bx1, by1);
-                    this.ctx.lineTo(bx2, by2);
-                    this.ctx.stroke();
-                }
-
-                if (eq.closed) {
-                    this.ctx.beginPath();
-                    this.ctx.roundRect(-rectW/2, -rectH/2, rectW, rectH, r);
-                    this.ctx.stroke();
-                }
-            } else if (eq.type === 'particles') {
-                const radius = Math.max(w, h) / 2 + padding;
-                for(let i=0; i<bins; i++) {
-                    const angle = (i / bins) * Math.PI * 2 + this.time * 0.01;
-                    const val = (this.dataArray[i * step] / 255);
-                    const dist = radius + val * 100 * strength;
-                    const px = Math.cos(angle) * dist;
-                    const py = Math.sin(angle) * dist;
-                    this.ctx.beginPath();
-                    this.ctx.arc(px, py, barW + val * 3, 0, Math.PI*2);
-                    this.ctx.fill();
-                }
-            }
-            this.ctx.restore();
-        }
-
-        // Logo
-        if (this.logoImage) {
-            const h = (this.height * (this.config.logoSize / 100));
-            const w = h * (this.logoImage.width / this.logoImage.height);
-            
-            if (anim.pulseGlow) {
-                const glowIntensity = (this.bassLevel / 255);
-                this.ctx.shadowBlur = 15 + glowIntensity * 30;
-                
-                let glowColor;
-                if(this.config.themeHue > 0) {
-                    glowColor = `hsl(${this.config.themeHue}, 100%, 50%)`;
-                } else {
-                    glowColor = 'white';
-                }
-                this.ctx.shadowColor = glowColor;
-            }
-
-            this.ctx.drawImage(this.logoImage, -w/2, -h/2, w, h);
-            this.ctx.shadowBlur = 0;
-        }
         this.ctx.restore();
     }
-
-    renderText() {
-        const anim = this.config.anim;
-        const bassTrigger = this.bassLevel > this.config.bassThreshold;
-        const speed = anim.textSpeed;
-
-        if (this.config.text) {
-            this.ctx.save();
-            this.ctx.font = `bold ${this.config.textSize}px "${this.config.font}"`;
-            this.ctx.textAlign = 'center';
-            this.ctx.fillStyle = 'white';
-
-            let tx = this.width/2, ty = this.height/2;
-            const mode = anim.textMode;
-
-            if (mode === 'static') {
-                if(this.config.textPos === 'top') ty = this.height * 0.15;
-                else if(this.config.textPos === 'bottom') ty = this.height * 0.85;
-            } else if (mode === 'float') {
-                ty += Math.sin(this.time * 0.05 * speed) * 50;
-                tx += Math.cos(this.time * 0.03 * speed) * 30;
-            } else if (mode === 'pingpong') {
-                this.textState.x += this.textState.vx * speed;
-                this.textState.y += this.textState.vy * speed;
-
-                const limitX = this.width / 2 - 100;
-                const limitY = this.height / 2 - 50;
-
-                if (Math.abs(this.textState.x) > limitX) this.textState.vx *= -1;
-                if (Math.abs(this.textState.y) > limitY) this.textState.vy *= -1;
-
-                tx += this.textState.x;
-                ty += this.textState.y;
-            } else if (mode === 'pulse') {
-                const s = 1 + (this.bassLevel / 255) * 0.5;
-                this.ctx.translate(tx, ty);
-                this.ctx.scale(s, s);
-                tx = 0; ty = 0;
-            }
-
-            if(anim.pulseGlow && bassTrigger) {
-                this.ctx.shadowBlur = 20;
-                this.ctx.shadowColor = 'white';
-            }
-            this.ctx.fillText(this.config.text, tx, ty);
-            this.ctx.restore();
+    renderStrobe() {
+        if (!this.config.strobe.active) return;
+        const interval = 1000 / this.config.strobe.speed;
+        if (Date.now() - this.config.strobe.lastFlash > interval) {
+            this.ctx.save(); this.ctx.fillStyle = this.config.strobe.color;
+            this.ctx.globalAlpha = 0.2; this.ctx.fillRect(0,0,this.width, this.height); this.ctx.restore();
+            this.config.strobe.lastFlash = Date.now();
         }
     }
-
-    renderLasers() {
-        if(!this.config.laser.active) return;
-        this.ctx.save();
-        this.ctx.globalCompositeOperation = 'screen';
-        this.ctx.strokeStyle = this.config.laser.color;
-        this.ctx.lineWidth = 2;
-        
-        const count = this.config.laser.count;
-        const preset = this.config.laser.preset;
-        const beat = this.bassLevel > this.config.bassThreshold;
-
-        // Simple line drawing logic for efficiency
-        this.ctx.beginPath();
-        if(preset === 'scan') {
-             const y = this.height/2 + Math.sin(this.time*0.1)*200;
-             this.ctx.moveTo(0,y); this.ctx.lineTo(this.width,y);
-        } else if (preset === 'random' && beat) {
-            for(let i=0; i<count; i++) {
-                this.ctx.moveTo(Math.random()*this.width, Math.random()*this.height);
-                this.ctx.lineTo(Math.random()*this.width, Math.random()*this.height);
-            }
-        }
-        this.ctx.stroke();
-        this.ctx.restore();
-    }
-
-    applyGlitch() {
-        const g = this.config.glitch;
-        if(!g.enabled) return;
-
-        const beat = this.bassLevel > this.config.bassThreshold;
-        // Effect chance: High on beat, low otherwise
-        const chance = beat ? 0.9 : 0.05; 
-        if (Math.random() > chance && !beat) return;
-
-        this.ctx.save();
-
-        // 1. ADVANCED RGB SPLIT
-        if (g.rgbAmount > 0) {
-            const shift = g.rgbAmount * (beat ? 1.5 : 0.5);
-            let rx=0, ry=0, gx=0, gy=0, bx=0, by=0;
-
-            if (g.rgbChaos) {
-                // Total chaos
-                rx = (Math.random()-0.5)*shift; ry = (Math.random()-0.5)*shift;
-                gx = (Math.random()-0.5)*shift; gy = (Math.random()-0.5)*shift;
-                bx = (Math.random()-0.5)*shift; by = (Math.random()-0.5)*shift;
-            } else if (g.rgbMode === 'pattern') {
-                // User requested: Red Left/Up, Blue Right/Down, Green Down
-                rx = -shift; ry = -shift;
-                bx = shift;  by = shift;
-                gx = 0;      gy = shift;
-            } else if (g.rgbMode === 'horizontal') {
-                rx = -shift; bx = shift;
-            } else {
-                ry = -shift; by = shift;
-            }
-
-            // Technique: Draw Red, Green, Blue channels separately using Composite
-            this.ctx.globalCompositeOperation = 'screen'; // Additive blending for RGB
-
-            // Since we can't easily extract channels, we use a trick:
-            // We draw the full canvas shifted and tinted. 
-            // Note: True channel separation is slow in 2D. We simulate it.
-            
-            // Draw Red tint shifted
-            // this.ctx.drawImage(this.canvas, rx, ry); -> this draws full color.
-            
-            // Simulation: 
-            // 1. Get image. 2. Draw it 3 times with multiply colors? No, multiply darkens.
-            // Standard Glitch Trick:
-            // Draw Copy at Offset 1 with RED globalAlpha? No.
-            // Best performant trick: 
-            // Draw a copy of the screen at offset, with exclusion or difference, then restore?
-            // Let's use the 'lighter' trick with specific colored overlays.
-            
-            // Actually, simply drawing the canvas again with `globalAlpha = 0.5` and `composite = screen` 
-            // at offsets creates a very close approximation of RGB split (Chromatic Aberration).
-            // To make it colored, we need to tint.
-            // But we can't tint drawImage in Canvas 2D easily.
-            
-            // Fallback to simple displacement for performance, but distinct directions
-            // We will just do 2 extra passes:
-            // 1. Red pass (simulated by drawing, then drawing a cyan rect over it? too slow)
-            
-            // "Poor man's" RGB Split for 60FPS:
-            // Draw the current canvas state into the future frame at offset
-            const temp = this.canvas; 
-            
-            this.ctx.globalCompositeOperation = 'lighter';
-            
-            // Red Shift simulation (Draws brighter version)
-            this.ctx.globalAlpha = 0.5;
-            this.ctx.fillStyle = 'red'; // Doesn't affect drawImage
-            // Real trick:
-            // Just offset the whole image.
-            this.ctx.drawImage(temp, rx, ry);
-            this.ctx.drawImage(temp, bx, by);
-            // This creates a blurry/bright ghosting which looks like RGB glitch.
-        }
-
-        // 2. SLICING (STRIPS)
-        if (g.sliceAmount > 0) {
-            const slices = Math.floor(g.sliceSpeed); // Use speed as count or frequency
-            const maxOff = g.sliceAmount;
-            
-            for(let i=0; i<slices; i++) {
-                // Decide direction based on mix
-                let dir = g.sliceDir;
-                if(dir === 'mix') dir = Math.random() > 0.5 ? 'hor' : 'ver';
-                
-                const offset = (Math.random() - 0.5) * maxOff;
-
-                if (dir === 'hor') {
-                    const h = Math.random() * (this.height/4);
-                    const y = Math.random() * this.height;
-                    this.ctx.drawImage(this.canvas, 0, y, this.width, h, offset, y, this.width, h);
-                } else {
-                    const w = Math.random() * (this.width/4);
-                    const x = Math.random() * this.width;
-                    this.ctx.drawImage(this.canvas, x, 0, w, this.height, x, offset, w, this.height);
-                }
-            }
-        }
-
-        // 3. NOISE
-        if (g.noiseAmount > 0) {
-            const h = this.height * (g.noiseAmount / 100);
-            const y = Math.random() * this.height;
-            // Draw a strip of inverted color or white noise
-            this.ctx.globalCompositeOperation = 'difference';
-            this.ctx.fillStyle = `rgb(${Math.random()*255},${Math.random()*255},${Math.random()*255})`;
-            this.ctx.fillRect(0, y, this.width, Math.random() * 50);
-        }
-
-        // 4. BLOCKS
-        if (g.blockAmount > 0) {
-            const size = 50 + Math.random()*100;
-            const cnt = 5;
-            for(let i=0; i<cnt; i++){
-                const sx = Math.random() * this.width;
-                const sy = Math.random() * this.height;
-                const dx = sx + (Math.random()-0.5) * g.blockAmount * 2;
-                const dy = sy + (Math.random()-0.5) * g.blockAmount * 2;
-                this.ctx.drawImage(this.canvas, sx, sy, size, size, dx, dy, size, size);
-            }
-        }
-
-        // 5. INVERT
-        if (g.invert && Math.random() > 0.9) {
-            this.ctx.save();
-            this.ctx.globalCompositeOperation = 'difference';
-            this.ctx.fillStyle = 'white';
-            this.ctx.fillRect(0, 0, this.width, this.height);
-            this.ctx.restore();
-        }
-
-        // 6. ZOOM
-        if (g.zoom && beat && Math.random() > 0.8) {
-            this.ctx.drawImage(this.canvas, -20, -20, this.width + 40, this.height + 40);
-        }
-
-        this.ctx.restore();
-    }
-
     animate() {
-        if(!this.isRunning) return;
-        this.time++;
-        this.analyzeAudio();
-
-        // Clear canvas
-        this.ctx.fillStyle = '#000';
-        this.ctx.fillRect(0,0,this.width, this.height);
-
-        // Iterate through layer order
+        if(!this.isRunning) return; this.time++; this.analyzeAudio();
+        this.ctx.fillStyle = '#000'; this.ctx.fillRect(0,0,this.width, this.height);
         this.config.layerOrder.forEach(layerId => {
-            switch(layerId) {
-                case 'background':
-                    this.renderBackground();
-                    break;
-                case 'visuals':
-                    this.ctx.save();
-                    this.renderVisuals();
-                    this.ctx.restore();
-                    break;
-                case 'logo':
-                    this.renderLogo();
-                    break;
-                case 'text':
-                    this.renderText();
-                    break;
-                case 'lasers':
-                    this.renderLasers();
-                    // Strobe logic (always on top of its layer)
-                    if(this.config.strobe.active) {
-                        const s = this.config.strobe;
-                        if(Date.now() - s.lastFlash > (1000/s.speed)) {
-                            if(this.bassLevel/255 > (1-s.reactivity)) {
-                                this.ctx.fillStyle = s.color;
-                                this.ctx.globalAlpha = 0.5;
-                                this.ctx.fillRect(0,0,this.width, this.height);
-                                this.ctx.globalAlpha = 1;
-                                s.lastFlash = Date.now();
-                            }
-                        }
-                    }
-                    break;
-                case 'glitch':
-                    this.applyGlitch();
-                    break;
-            }
+            if(layerId === 'background') this.renderBackground();
+            if(layerId === 'visuals') this.renderVisuals();
+            if(layerId === 'logo') this.renderLogo();
+            if(layerId === 'text') this.renderText();
+            if(layerId === 'lasers') this.renderLasers();
+            if(layerId === 'glitch') this.renderGlitch();
         });
-
+        this.renderStrobe();
+        if (this.config.brightness < 100) {
+            this.ctx.save(); this.ctx.globalCompositeOperation = 'multiply';
+            const b = this.config.brightness / 100; this.ctx.fillStyle = `rgb(${255*b},${255*b},${255*b})`; this.ctx.fillRect(0,0,this.width, this.height); this.ctx.restore();
+        }
         requestAnimationFrame(() => this.animate());
     }
-
     setupTabs() {
-        const tabs = document.querySelectorAll('.nav-tab');
-        const contents = document.querySelectorAll('.tab-content');
-        
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                tabs.forEach(t => t.classList.remove('active'));
-                contents.forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById(tab.dataset.target).classList.add('active');
-            });
+        const btns = document.querySelectorAll('.nav-btn');
+        const panels = document.querySelectorAll('.tab-panel');
+        btns.forEach(btn => {
+            btn.onclick = () => {
+                btns.forEach(b => { b.classList.remove('bg-primary', 'text-white', 'shadow-sm', 'font-bold'); b.classList.add('text-slate-400', 'font-medium'); });
+                btn.classList.add('bg-primary', 'text-white', 'shadow-sm', 'font-bold'); btn.classList.remove('text-slate-400', 'font-medium');
+                panels.forEach(p => p.classList.remove('active'));
+                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            };
         });
     }
-
     populateUI() {
-        const catTabs = document.getElementById('category-tabs');
-        const presetSelect = document.getElementById('preset-select');
-        let firstCat = true;
-
+        const catContainer = document.getElementById('category-tabs');
         for (const [key, val] of Object.entries(this.themes)) {
-            const btn = document.createElement('div');
-            btn.className = `tab-btn ${firstCat ? 'active' : ''}`;
-            btn.innerText = val.name;
-            btn.onclick = (e) => {
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                this.updatePresetDropdown(key);
-            };
-            catTabs.appendChild(btn);
-            if(firstCat) {
-                this.updatePresetDropdown(key);
-                firstCat = false;
-            }
+            const btn = document.createElement('button');
+            btn.className = "px-3 py-2 bg-[#1c1022] hover:bg-[#332839] text-slate-300 rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2 uppercase";
+            btn.innerHTML = `<span class="material-symbols-outlined text-base">${val.icon}</span> ${val.name}`;
+            btn.onclick = () => this.updatePresets(key);
+            catContainer.appendChild(btn);
         }
+        this.updatePresets('cyber'); this.populateLayers();
     }
-
-    populateLayersUI() {
-        const list = document.getElementById('layer-list');
-        if(!list) return;
-        list.innerHTML = '';
-        
-        const labels = {
-            'background': 'Background',
-            'visuals': 'Audio Visuals',
-            'logo': 'Logo & Center EQ',
-            'text': 'Text Overlay',
-            'lasers': 'Lasers / Strobe',
-            'glitch': 'Post-FX Glitch'
-        };
-
-        this.config.layerOrder.forEach((id, index) => {
-            const item = document.createElement('div');
-            item.className = 'flex items-center justify-between bg-black/40 p-3 rounded border border-gray-800';
-            item.innerHTML = `
-                <span class="text-xs font-bold text-gray-300">${labels[id] || id}</span>
-                <div class="flex gap-2">
-                    <button class="layer-up text-blue-500 hover:text-blue-400 p-1" data-index="${index}">
-                        <i class="fas fa-chevron-up"></i>
-                    </button>
-                    <button class="layer-down text-blue-500 hover:text-blue-400 p-1" data-index="${index}">
-                        <i class="fas fa-chevron-down"></i>
-                    </button>
-                </div>
-            `;
-            list.appendChild(item);
-        });
-
-        // Add listeners
-        list.querySelectorAll('.layer-up').forEach(btn => {
-            btn.onclick = () => {
-                const idx = parseInt(btn.dataset.index);
-                if(idx > 0) {
-                    const temp = this.config.layerOrder[idx];
-                    this.config.layerOrder[idx] = this.config.layerOrder[idx-1];
-                    this.config.layerOrder[idx-1] = temp;
-                    this.populateLayersUI();
-                }
-            };
-        });
-        list.querySelectorAll('.layer-down').forEach(btn => {
-            btn.onclick = () => {
-                const idx = parseInt(btn.dataset.index);
-                if(idx < this.config.layerOrder.length - 1) {
-                    const temp = this.config.layerOrder[idx];
-                    this.config.layerOrder[idx] = this.config.layerOrder[idx+1];
-                    this.config.layerOrder[idx+1] = temp;
-                    this.populateLayersUI();
-                }
-            };
-        });
-    }
-
-    addToPlaylist(type, element, name) {
-        this.playlist.push({ type, element, name });
-        if (this.playlist.length === 1) {
-            this.lastSlideTime = Date.now();
-        }
-        this.populatePlaylistUI();
-    }
-
-    populatePlaylistUI() {
-        const list = document.getElementById('playlist-list');
-        if (!list) return;
-        
-        if (this.playlist.length === 0) {
-            list.innerHTML = '<p class="text-[9px] text-gray-600 text-center py-2">Add images or videos to start playlist</p>';
-            return;
-        }
-
-        list.innerHTML = '';
-        this.playlist.forEach((item, index) => {
-            const div = document.createElement('div');
-            div.className = 'flex items-center justify-between bg-black/40 p-2 rounded border border-gray-800 text-[10px]';
-            div.innerHTML = `
-                <div class="flex items-center gap-2 overflow-hidden">
-                    <span class="text-gray-500 w-4">${index + 1}</span>
-                    <i class="fas ${item.type === 'image' ? 'fa-image' : 'fa-video'} text-blue-400"></i>
-                    <span class="truncate text-gray-300" title="${item.name}">${item.name}</span>
-                </div>
-                <button class="remove-playlist-item text-red-500 hover:text-red-400 p-1" data-index="${index}">
-                    <i class="fas fa-times"></i>
-                </button>
-            `;
-            list.appendChild(div);
-        });
-
-        list.querySelectorAll('.remove-playlist-item').forEach(btn => {
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                const idx = parseInt(btn.dataset.index);
-                const removedItem = this.playlist[idx];
-                if (removedItem.type === 'video') {
-                    removedItem.element.pause();
-                    removedItem.element.src = "";
-                    removedItem.element.load();
-                }
-                
-                this.playlist.splice(idx, 1);
-                if (this.playlistIndex >= this.playlist.length) {
-                    this.playlistIndex = Math.max(0, this.playlist.length - 1);
-                }
-                if (this.playlist.length === 0) {
-                    this.playlistIndex = 0;
-                    this.lastSlideTime = 0;
-                }
-                this.populatePlaylistUI();
-            };
-        });
-    }
-
-    updatePresetDropdown(catKey) {
-        const select = document.getElementById('preset-select');
-        select.innerHTML = '';
+    updatePresets(catKey) {
+        const grid = document.getElementById('preset-grid'); grid.innerHTML = '';
         const presets = this.themes[catKey].presets;
         for(const [pkey, pval] of Object.entries(presets)) {
-            const opt = document.createElement('option');
-            opt.value = pkey;
-            opt.innerText = pval.name;
-            select.appendChild(opt);
+            const item = document.createElement('div');
+            item.className = "group relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-transparent hover:border-primary transition-all active:scale-95";
+            item.innerHTML = `<div class="absolute inset-0 bg-slate-800 flex items-center justify-center transition-transform group-hover:scale-110"><span class="material-symbols-outlined text-white text-3xl">play_arrow</span></div><div class="absolute bottom-0 left-0 right-0 p-1 bg-black/60 text-[8px] text-white text-center backdrop-blur-sm uppercase font-bold tracking-widest leading-tight">${pval.name}</div>`;
+            item.onclick = () => { this.config.theme = pkey; document.getElementById('active-preset-name').innerText = 'Активен: ' + pval.name; };
+            grid.appendChild(item);
         }
-        this.config.theme = Object.keys(presets)[0];
     }
+    populateLayers() {
+        const list = document.getElementById('layer-list'); list.innerHTML = '';
+        const labels = { 'background': 'Фоновый контент', 'visuals': 'Визуализация', 'logo': 'Логотип и центр', 'text': 'Текстовый слой', 'lasers': 'Лазерное шоу', 'glitch': 'Пост-эффекты (Глитч)' };
+        const icons = { 'background': 'wallpaper', 'visuals': 'equalizer', 'logo': 'diamond', 'text': 'title', 'lasers': 'all_inclusive', 'glitch': 'splitscreen' };
+        const types = { 'background': 'Media', 'visuals': 'Generative', 'logo': 'Image', 'text': 'Text', 'lasers': 'Generative', 'glitch': 'FX' };
+        
+        // Render order: last in array is top-most. UI: top-most should be first in list.
+        const uiOrder = [...this.config.layerOrder].reverse();
+        uiOrder.forEach((id, idx) => {
+            const div = document.createElement('div');
+            div.className = `flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${this.selectedLayer === id ? 'bg-primary/10 border-primary ring-1 ring-primary/20 shadow-[0_0_15px_rgba(164,19,236,0.15)]' : 'bg-[#332839]/60 border-[#4b3b54] hover:border-primary/50'}`;
+            div.onclick = (e) => { if(!e.target.closest('button')) { this.selectedLayer = id; this.populateLayers(); this.updateLayerProps(); } };
 
+            const moveLayer = (dir) => {
+                const index = this.config.layerOrder.indexOf(id);
+                const newIndex = index + dir;
+                if (newIndex >= 0 && newIndex < this.config.layerOrder.length) {
+                    const temp = this.config.layerOrder[index];
+                    this.config.layerOrder[index] = this.config.layerOrder[newIndex];
+                    this.config.layerOrder[newIndex] = temp;
+                    this.populateLayers();
+                }
+            };
+
+            div.innerHTML = `<div class="flex flex-col gap-1 text-slate-400"><button class="up-btn hover:text-white transition-colors"><span class="material-symbols-outlined text-lg">expand_less</span></button><button class="down-btn hover:text-white transition-colors"><span class="material-symbols-outlined text-lg">expand_more</span></button></div><div class="size-10 rounded bg-black flex items-center justify-center border border-[#4b3b54] group-hover:border-primary/50 transition-colors shadow-inner"><span class="material-symbols-outlined ${this.selectedLayer === id ? 'text-primary' : 'text-white'} text-lg opacity-60">${icons[id]}</span></div><div class="flex-1 min-w-0"><div class="flex items-center gap-2"><span class="text-sm font-bold text-white ${this.selectedLayer === id ? 'text-primary' : ''}">${labels[id]}</span><span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-primary/20 text-primary border border-primary/30 uppercase tracking-tighter">${types[id]}</span></div></div><div class="flex items-center gap-1"><button class="p-2 text-primary hover:bg-white/5 rounded-lg transition-colors"><span class="material-symbols-outlined text-lg font-bold">visibility</span></button><div class="w-px h-6 bg-slate-700 mx-1"></div><span class="text-xs font-mono text-slate-500 w-6 text-right">0${idx+1}</span></div>`;
+            div.querySelector('.up-btn').onclick = (e) => { e.stopPropagation(); moveLayer(1); };
+            div.querySelector('.down-btn').onclick = (e) => { e.stopPropagation(); moveLayer(-1); };
+            list.appendChild(div);
+        });
+        document.getElementById('layer-count-badge').innerText = `${this.config.layerOrder.length} АКТИВНЫХ СЛОЕВ`;
+        this.updateLayerProps();
+    }
+    updateLayerProps() {
+        const panel = document.getElementById('layer-props-panel');
+        const labels = { 'background': 'Фоновый контент', 'visuals': 'Визуализация', 'logo': 'Логотип и центр', 'text': 'Текстовый слой', 'lasers': 'Лазерное шоу', 'glitch': 'Пост-эффекты (Глитч)' };
+        const icons = { 'background': 'wallpaper', 'visuals': 'equalizer', 'logo': 'diamond', 'text': 'title', 'lasers': 'all_inclusive', 'glitch': 'splitscreen' };
+        const types = { 'background': 'Media', 'visuals': 'Generative', 'logo': 'Image', 'text': 'Text', 'lasers': 'Generative', 'glitch': 'FX' };
+        const id = this.selectedLayer;
+        panel.innerHTML = `
+            <div class="flex items-start gap-3 pb-4 border-b border-[#332839]">
+                <div class="size-16 rounded-lg bg-black border border-primary/50 shrink-0 shadow-[0_0_15px_rgba(164,19,236,0.3)] flex items-center justify-center"><span class="material-symbols-outlined text-primary text-3xl">${icons[id]}</span></div>
+                <div><h4 class="font-bold text-white text-lg">${labels[id]}</h4><span class="text-xs text-primary font-mono uppercase">ID: LYR-${id.substring(0,3).toUpperCase()}</span><div class="mt-1 flex gap-2"><span class="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30 uppercase">${types[id]}</span></div></div>
+            </div>
+            <div class="space-y-2"><label class="text-xs font-bold uppercase tracking-wider text-slate-500">Режим смешивания</label><select class="w-full bg-[#161118] text-white text-sm rounded-lg px-3 py-2 border border-[#332839] appearance-none font-medium"><option>Normal</option><option selected>Add</option><option>Screen</option><option>Multiply</option></select></div>
+            <div class="space-y-3"><div class="flex justify-between items-center"><label class="text-xs font-bold uppercase tracking-wider text-slate-500">Прозрачность</label><span class="text-xs font-mono bg-primary/20 text-primary px-2 py-0.5 rounded">100%</span></div><input class="w-full h-1" type="range" value="100"/></div>
+            <div class="grid grid-cols-2 gap-4 pt-2">
+                <div class="space-y-1"><label class="text-[10px] font-bold uppercase text-slate-500">Масштаб X</label><input class="w-full bg-[#161118] border-none rounded p-1.5 text-xs text-center font-mono" type="number" value="100"/></div>
+                <div class="space-y-1"><label class="text-[10px] font-bold uppercase text-slate-500">Масштаб Y</label><input class="w-full bg-[#161118] border-none rounded p-1.5 text-xs text-center font-mono" type="number" value="100"/></div>
+            </div>
+        `;
+    }
     attachListeners() {
-        // Helper to bind inputs to config
-        const bind = (id, objPath, key, type = 'value') => {
-            const el = document.getElementById(id);
-            if(!el) return;
-            el.addEventListener('input', (e) => {
-                let val = type === 'checkbox' ? e.target.checked : e.target.value;
-                if(type === 'value' && !isNaN(parseFloat(val)) && id !== 'text-input' && id !== 'strobe-color' && id !== 'laser-color') val = parseFloat(val);
-                
-                // Traverse config object
-                if (objPath) {
-                    this.config[objPath][key] = val;
-                } else {
-                    this.config[key] = val;
+        const setVal = (path, val) => {
+            let obj = this.config; const parts = path.split('.');
+            for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+            obj[parts[parts.length - 1]] = val;
+        };
+        const bind = (id, path, labelId, suffix = '', isPercentage = false) => {
+            const el = document.getElementById(id); const label = document.getElementById(labelId);
+            if (!el) return; el.oninput = (e) => {
+                const val = parseFloat(e.target.value); setVal(path, val);
+                if (label) {
+                    if (isPercentage) label.innerText = Math.round(val) + '%';
+                    else if (suffix === '%') label.innerText = Math.round(val * 100) + '%';
+                    else label.innerText = val + suffix;
                 }
-            });
+            };
         };
 
-        // Scene
-        bind('audio-gain', null, 'gain');
-        bind('bass-threshold', null, 'bassThreshold');
-        bind('theme-hue', null, 'themeHue');
-        document.getElementById('preset-select').addEventListener('change', (e) => this.config.theme = e.target.value);
-        document.getElementById('fs-btn').onclick = () => {
-             if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-             else if (document.exitFullscreen) document.exitFullscreen();
+        bind('audio-gain', 'gain', 'gain-val'); bind('bass-threshold', 'bassThreshold', 'bass-val');
+        bind('theme-hue', 'themeHue', 'hue-val', '°'); bind('global-brightness', 'brightness', 'bright-val', '%', true);
+        bind('global-bloom', 'bloom.intensity', 'bloom-val', '%', true);
+        bind('bg-opacity', 'bg.opacity', 'opacity-val', '%');
+        document.getElementById('bg-pulse').onchange = (e) => this.config.bg.pulse = e.target.checked;
+        document.getElementById('bg-shake').onchange = (e) => this.config.bg.shake = e.target.checked;
+        document.getElementById('bg-spin').onchange = (e) => this.config.bg.spin = e.target.checked;
+        document.getElementById('playlist-enable').onchange = (e) => this.config.playlist.enabled = e.target.checked;
+        document.getElementById('playlist-duration').onchange = (e) => this.config.playlist.duration = parseInt(e.target.value);
+        document.getElementById('playlist-loop').onchange = (e) => this.config.playlist.loop = e.target.checked;
+
+        bind('logo-size', 'logo.size', 'logo-size-val', '%', true);
+        document.getElementById('logo-eq-enabled').onchange = (e) => this.config.logo.eq.enabled = e.target.checked;
+        document.getElementById('logo-eq-type').onchange = (e) => this.config.logo.eq.type = e.target.value;
+        bind('logo-eq-strength', 'logo.eq.strength', null); bind('logo-eq-padding', 'logo.eq.padding', null);
+        bind('logo-eq-radius', 'logo.eq.radius', null); bind('logo-eq-bars', 'logo.eq.bars', null);
+        bind('logo-eq-width', 'logo.eq.width', null); bind('logo-eq-glow', 'logo.eq.glow', null);
+        document.getElementById('logo-eq-closed').onchange = (e) => this.config.logo.eq.closed = e.target.checked;
+        document.getElementById('logo-fx-pulse-size').onchange = (e) => this.config.logo.fx.pulseSize = e.target.checked;
+        document.getElementById('logo-fx-pulse-glow').onchange = (e) => this.config.logo.fx.pulseGlow = e.target.checked;
+        document.getElementById('logo-fx-shake').onchange = (e) => this.config.logo.fx.shake = e.target.checked;
+        document.getElementById('logo-fx-sway').onchange = (e) => this.config.logo.fx.sway = e.target.checked;
+
+        document.getElementById('text-input').oninput = (e) => this.config.text.content = e.target.value;
+        document.getElementById('font-family').onchange = (e) => this.config.text.font = e.target.value;
+        bind('text-speed', 'text.speed', null);
+        document.querySelectorAll('#text-position button').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('#text-position button').forEach(b => b.classList.remove('bg-[#3a2544]', 'text-primary', 'shadow-sm'));
+                btn.classList.add('bg-[#3a2544]', 'text-primary', 'shadow-sm'); this.config.text.pos = btn.dataset.pos;
+            };
+        });
+        document.querySelectorAll('input[name="text-anim"]').forEach(radio => {
+            radio.onchange = (e) => {
+                if (e.target.checked) this.config.text.anim = e.target.value;
+            };
+        });
+
+        document.getElementById('glitch-enabled').onchange = (e) => this.config.glitch.enabled = e.target.checked;
+        bind('glitch-rgb-amount', 'glitch.rgbAmount', 'rgb-amount-val', 'px');
+        bind('glitch-rgb-intensity', 'glitch.rgbIntensity', 'rgb-intensity-val', '%', true);
+        document.getElementById('glitch-chaos').onclick = () => {
+            this.config.glitch.rgbChaos = !this.config.glitch.rgbChaos;
+            document.getElementById('glitch-chaos').innerText = `ХАОС: ${this.config.glitch.rgbChaos ? 'ВКЛ' : 'ВЫКЛ'}`;
         };
-
-        // Content
-        bind('bg-opacity', null, 'bgOpacity');
-        bind('bg-pulse', 'bgAnim', 'pulse', 'checkbox');
-        bind('bg-shake', 'bgAnim', 'shake', 'checkbox');
-        bind('bg-rotate', 'bgAnim', 'rotate', 'checkbox');
-        
-        document.getElementById('playlist-enabled').addEventListener('change', (e) => {
-            this.config.playlistEnabled = e.target.checked;
-            if(e.target.checked) {
-                this.lastSlideTime = Date.now();
-            } else {
-                // Pause all playlist videos when disabled, except maybe the main one
-                this.playlist.forEach(item => {
-                    if (item.type === 'video' && item.element !== this.bgVideo) {
-                        item.element.pause();
-                    }
-                });
-                if (this.bgVideo) this.bgVideo.play();
-            }
+        document.querySelectorAll('.rgb-mode-btn').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('.rgb-mode-btn').forEach(b => { b.classList.remove('bg-primary/20', 'text-primary', 'border-primary'); b.classList.add('bg-[#332839]', 'text-slate-400'); });
+                btn.classList.add('bg-primary/20', 'text-primary', 'border-primary'); btn.classList.remove('bg-[#332839]', 'text-slate-400');
+                this.config.glitch.rgbMode = btn.dataset.mode;
+            };
+        });
+        bind('glitch-slice-density', 'glitch.sliceDensity', 'slice-density-val');
+        bind('glitch-slice-shift', 'glitch.sliceShift', 'slice-shift-val', '%', true);
+        bind('glitch-noise-amount', 'glitch.noiseAmount', 'noise-amount-val', '%', true);
+        bind('glitch-color-noise', 'glitch.colorNoise', 'color-noise-val', '%', true);
+        document.getElementById('glitch-scatter-random').onchange = (e) => this.config.glitch.scatterRandom = e.target.checked;
+        bind('glitch-block-size', 'glitch.blockAmount', 'block-size-val', 'px');
+        bind('glitch-scatter-range', 'glitch.scatterRange', 'scatter-range-val', '%', true);
+        document.querySelectorAll('.fx-btn').forEach(btn => {
+            btn.onclick = () => {
+                const fx = btn.dataset.fx; this.config.glitch[fx] = !this.config.glitch[fx];
+                btn.classList.toggle('border-primary', this.config.glitch[fx]); btn.classList.toggle('bg-primary/10', this.config.glitch[fx]);
+            };
         });
 
-        bind('playlist-loop', null, 'playlistLoop', 'checkbox');
-        bind('playlist-duration', null, 'slideDuration');
-
-        bind('logo-size', null, 'logoSize');
-        bind('anim-pulse-size', 'anim', 'pulseSize', 'checkbox');
-        bind('anim-pulse-glow', 'anim', 'pulseGlow', 'checkbox');
-        bind('anim-shake', 'anim', 'shake', 'checkbox');
-        bind('anim-sway', 'anim', 'sway', 'checkbox');
-
-        bind('logo-eq-enabled', 'logoEq', 'enabled', 'checkbox');
-        bind('logo-eq-type', 'logoEq', 'type');
-        bind('logo-eq-strength', 'logoEq', 'strength');
-        bind('logo-eq-padding', 'logoEq', 'padding');
-        bind('logo-eq-radius', 'logoEq', 'borderRadius');
-        bind('logo-eq-count', 'logoEq', 'barCount');
-        bind('logo-eq-width', 'logoEq', 'barWidth');
-        bind('logo-eq-closed', 'logoEq', 'closed', 'checkbox');
-        bind('logo-eq-glow', 'logoEq', 'glow');
-        
-        bind('text-input', null, 'text');
-        bind('font-family', null, 'font');
-        bind('text-pos', null, 'textPos');
-        bind('text-mode', 'anim', 'textMode');
-        bind('text-speed', 'anim', 'textSpeed');
-
-        // Glitch
-        bind('glitch-enabled', 'glitch', 'enabled', 'checkbox');
-        bind('glitch-rgb-amount', 'glitch', 'rgbAmount');
-        bind('glitch-rgb-chaos', 'glitch', 'rgbChaos', 'checkbox');
-        bind('glitch-rgb-mode', 'glitch', 'rgbMode');
-        bind('glitch-slice-amount', 'glitch', 'sliceAmount');
-        bind('glitch-slice-dir', 'glitch', 'sliceDir');
-        bind('glitch-slice-speed', 'glitch', 'sliceSpeed');
-        bind('glitch-noise-amount', 'glitch', 'noiseAmount');
-        bind('glitch-block-amount', 'glitch', 'blockAmount');
-        bind('glitch-invert', 'glitch', 'invert', 'checkbox');
-        bind('glitch-zoom', 'glitch', 'zoom', 'checkbox');
-
-        // Layers
-        this.populateLayersUI();
-        this.populatePlaylistUI();
-
-        // Lights
-        bind('strobe-active', 'strobe', 'active', 'checkbox');
-        bind('strobe-color', 'strobe', 'color');
-        bind('strobe-speed', 'strobe', 'speed');
-        bind('strobe-reactivity', 'strobe', 'reactivity');
-        
-        bind('laser-active', 'laser', 'active', 'checkbox');
-        bind('laser-preset', 'laser', 'preset');
-        bind('laser-color', 'laser', 'color');
-        bind('laser-count', 'laser', 'count');
-
-        // Files
-        document.getElementById('bg-upload').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if(file) {
-                if(this.bgVideo) {
-                    this.bgVideo.pause();
-                    this.bgVideo.src = "";
-                    this.bgVideo.load();
-                    this.bgVideo = null;
-                }
-                const img = new Image();
-                img.onload = () => {
-                    this.bgImage = img;
-                    this.addToPlaylist('image', img, file.name);
-                };
-                img.src = URL.createObjectURL(file);
-            }
+        document.getElementById('strobe-active').onchange = (e) => this.config.strobe.active = e.target.checked;
+        bind('strobe-speed', 'strobe.speed', 'strobe-speed-val', ' Hz');
+        bind('strobe-pulse-width', 'strobe.pulseWidth', 'strobe-pulse-val', ' ms');
+        document.getElementById('strobe-color').oninput = (e) => { this.config.strobe.color = e.target.value; document.getElementById('strobe-hex').value = e.target.value.toUpperCase(); };
+        document.getElementById('laser-active').onchange = (e) => this.config.laser.active = e.target.checked;
+        document.querySelectorAll('.laser-btn').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('.laser-btn').forEach(b => b.classList.remove('bg-primary', 'text-white'));
+                btn.classList.add('bg-primary', 'text-white'); this.config.laser.preset = btn.dataset.preset;
+            };
         });
-
-        document.getElementById('video-upload').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if(file) {
-                if(this.bgVideo) {
-                    this.bgVideo.pause();
-                    this.bgVideo.src = "";
-                    this.bgVideo.load();
-                }
-                this.bgImage = null;
-                const video = document.createElement('video');
-                video.src = URL.createObjectURL(file);
-                video.loop = true;
-                video.muted = true;
-                video.oncanplay = () => {
-                    video.play();
-                    this.bgVideo = video;
-                    this.addToPlaylist('video', video, file.name);
-                };
+        bind('laser-count', 'laser.count', 'laser-count-val');
+        bind('laser-thickness', 'laser.thickness', 'laser-thick-val', 'px');
+        bind('laser-speed', 'laser.speed', 'laser-speed-val', '%', true);
+        document.getElementById('laser-color').oninput = (e) => { this.config.laser.color = e.target.value; document.getElementById('laser-color-preview').style.backgroundColor = e.target.value; };
+        bind('fog-density', 'fog', null); bind('bloom-threshold', 'bloom.threshold', null);
+        bind('bloom-radius', 'bloom.radius', null); bind('bloom-intensity', 'bloom.intensity', null);
+        document.getElementById('fs-toggle').onchange = (e) => { if (e.target.checked) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); };
+        document.getElementById('reset-btn').onclick = () => location.reload();
+        const addToPlaylist = (el, type, name) => {
+            this.config.playlist.items.push({ el, type, name });
+            const list = document.getElementById('playlist-list');
+            const item = document.createElement('div');
+            item.className = "text-[8px] bg-[#161118] p-1 rounded border border-[#332839] flex justify-between uppercase font-bold";
+            item.innerHTML = `<span>${name}</span><span class="text-primary">${type}</span>`;
+            list.appendChild(item);
+            if (!this.bgImage && !this.bgVideo) { if (type === 'video') this.bgVideo = el; else this.bgImage = el; }
+        };
+        document.getElementById('bg-upload').onchange = (e) => {
+            const file = e.target.files[0]; if (file) {
+                const img = new Image(); img.onload = () => { this.bgImage = img; this.bgVideo = null; addToPlaylist(img, 'img', file.name); }; img.src = URL.createObjectURL(file);
             }
-        });
-        document.getElementById('logo-upload').addEventListener('change', (e) => {
-             if(e.target.files[0]) {
-                const img = new Image();
-                img.onload = () => this.logoImage = img;
-                img.src = URL.createObjectURL(e.target.files[0]);
+        };
+        document.getElementById('video-upload').onchange = (e) => {
+            const file = e.target.files[0]; if (file) {
+                const vid = document.createElement('video'); vid.src = URL.createObjectURL(file); vid.loop = true; vid.muted = true; vid.oncanplay = () => { vid.play(); addToPlaylist(vid, 'video', file.name); }; this.bgVideo = vid; this.bgImage = null;
             }
-        });
+        };
+        document.getElementById('playlist-next').onclick = () => {
+            if (this.config.playlist.items.length === 0) return;
+            this.config.playlist.index = (this.config.playlist.index + 1) % this.config.playlist.items.length;
+            const item = this.config.playlist.items[this.config.playlist.index];
+            if (item.type === 'video') { this.bgVideo = item.el; this.bgImage = null; } else { this.bgImage = item.el; this.bgVideo = null; }
+            this.config.playlist.lastSwitch = Date.now();
+        };
+        document.getElementById('playlist-prev').onclick = () => {
+            if (this.config.playlist.items.length === 0) return;
+            this.config.playlist.index = (this.config.playlist.index - 1 + this.config.playlist.items.length) % this.config.playlist.items.length;
+            const item = this.config.playlist.items[this.config.playlist.index];
+            if (item.type === 'video') { this.bgVideo = item.el; this.bgImage = null; } else { this.bgImage = item.el; this.bgVideo = null; }
+            this.config.playlist.lastSwitch = Date.now();
+        };
+        document.getElementById('playlist-clear').onclick = () => { this.config.playlist.items = []; document.getElementById('playlist-list').innerHTML = ''; this.bgImage = null; this.bgVideo = null; };
+        document.getElementById('logo-upload').onchange = (e) => { const file = e.target.files[0]; if (file) { const img = new Image(); img.onload = () => this.logoImage = img; img.src = URL.createObjectURL(file); } };
     }
 }
-
 window.onload = () => { window.app = new VisualizerApp(); };
 </script>
 </body>
