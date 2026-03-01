@@ -42,7 +42,14 @@
             box-shadow: 0 0 10px rgba(164, 19, 236, 0.5); border: 2px solid #fff;
         }
         input[type=range]::-webkit-slider-runnable-track {
-            width: 100%; height: 4px; cursor: pointer; background: #3a2544; border-radius: 2px;
+            width: 100%; height: 8px; cursor: pointer; background: #2a1b32; border-radius: 4px;
+            border: 1px solid rgba(164, 19, 236, 0.5);
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%;
+            background: #a413ec; cursor: pointer; margin-top: -6px;
+            box-shadow: 0 0 15px rgba(164, 19, 236, 0.8); border: 2px solid #fff;
         }
 
         body { background-color: #000; overflow: hidden; margin: 0; font-family: 'Space Grotesk', sans-serif; }
@@ -161,6 +168,16 @@
                         <div class="px-2 py-1 bg-primary/10 rounded text-xs text-primary font-bold border border-primary/20" id="active-preset-name">Активен: Neon Pulse</div>
                     </div>
                     <div class="p-5 flex-1 overflow-y-auto space-y-6">
+                        <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 shadow-[0_0_40px_-10px_rgba(164,19,236,0.3)] group mb-4">
+                            <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1534856966153-c86d43d53fe0?q=80&w=800&auto=format&fit=crop')] bg-cover bg-center opacity-60"></div>
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                            <div class="absolute bottom-3 left-4">
+                                <div class="flex items-center gap-2">
+                                    <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
+                                    <span class="text-[10px] font-bold text-white tracking-wide uppercase">LIVE PREVIEW</span>
+                                </div>
+                            </div>
+                        </div>
                         <div class="space-y-3"><label class="text-xs font-bold uppercase tracking-wider text-slate-400">Категория</label><div class="grid grid-cols-2 gap-2" id="category-tabs"></div></div>
                         <div class="space-y-3"><label class="text-xs font-bold uppercase tracking-wider text-slate-400">Пресеты</label><div class="grid grid-cols-3 gap-3" id="preset-grid"></div></div>
                     </div>
@@ -286,6 +303,11 @@
                 <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
                     <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">noise_control_off</span>Шум и искажения</h3></div>
                     <div class="p-5 flex-1 overflow-y-auto space-y-6">
+                        <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-slate-800 flex items-center justify-center group shadow-[0_0_20px_rgba(164,19,236,0.15)] mb-4">
+                            <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1550684848-fac1c5b4e853?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80')] bg-cover bg-center opacity-40"></div>
+                            <div class="absolute top-1/4 left-0 w-full h-8 bg-black/20 backdrop-invert translate-x-2 skew-x-12"></div>
+                            <div class="absolute bottom-2 right-2 bg-black/80 text-[8px] px-2 py-1 rounded text-primary font-mono border border-primary/20 uppercase font-bold">FX PREVIEW</div>
+                        </div>
                         <div class="space-y-4 pt-2"><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><span class="material-symbols-outlined text-sm">grain</span> Цифровой шум</h4>
                         <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-5">
                             <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Сила зерна</label><span class="text-xs text-primary font-mono" id="noise-amount-val">15%</span></div><input class="w-full h-1" max="100" min="0" type="range" value="15" id="glitch-noise-amount"/></div>
@@ -463,26 +485,50 @@ class VisualizerApp {
             const now = Date.now();
             if (now - this.config.playlist.lastSwitch > this.config.playlist.duration * 1000) {
                 this.config.playlist.index = (this.config.playlist.index + 1) % this.config.playlist.items.length;
-                const item = this.config.playlist.items[this.config.playlist.index];
-                if (item.type === 'video') { this.bgVideo = item.el; this.bgImage = null; }
-                else { this.bgImage = item.el; this.bgVideo = null; }
+                this.switchToPlaylistItem(this.config.playlist.index);
                 this.config.playlist.lastSwitch = now;
             }
         }
         let media = this.bgVideo || this.bgImage;
         if (media) {
-            this.ctx.save(); this.ctx.globalAlpha = this.config.bg.opacity;
+            const isVideo = media.tagName === 'VIDEO';
+            if (isVideo && (media.paused || media.ended)) media.play().catch(() => {});
+
+            this.ctx.save();
+            this.ctx.globalAlpha = this.config.bg.opacity;
+            this.ctx.imageSmoothingEnabled = true;
+
             let scaleMult = 1;
             if (this.config.bg.pulse && this.bassLevel > this.config.bassThreshold) scaleMult = 1.05;
-            const mw = media.tagName === 'VIDEO' ? media.videoWidth : media.width;
-            const mh = media.tagName === 'VIDEO' ? media.videoHeight : media.height;
-            const scale = Math.max(this.width / mw, this.height / mh) * scaleMult;
-            this.ctx.translate(this.width/2, this.height/2);
-            if (this.config.bg.spin) this.ctx.rotate(this.time * 0.01);
-            if (this.config.bg.shake && this.bassLevel > this.config.bassThreshold) this.ctx.translate(Math.random()*10-5, Math.random()*10-5);
-            this.ctx.scale(scale, scale);
-            this.ctx.drawImage(media, -mw/2, -mh/2, mw, mh); this.ctx.restore();
+
+            const mw = isVideo ? media.videoWidth : media.width;
+            const mh = isVideo ? media.videoHeight : media.height;
+            if (mw > 0 && mh > 0) {
+                const scale = Math.max(this.width / mw, this.height / mh) * scaleMult;
+                this.ctx.translate(this.width / 2, this.height / 2);
+                if (this.config.bg.spin) this.ctx.rotate(this.time * 0.01);
+                if (this.config.bg.shake && this.bassLevel > this.config.bassThreshold) {
+                    this.ctx.translate(Math.random() * 20 - 10, Math.random() * 20 - 10);
+                }
+                this.ctx.scale(scale, scale);
+                this.ctx.drawImage(media, -mw / 2, -mh / 2, mw, mh);
+            }
+            this.ctx.restore();
         }
+    }
+    switchToPlaylistItem(index) {
+        const item = this.config.playlist.items[index];
+        if (!item) return;
+        if (this.bgVideo) { this.bgVideo.pause(); }
+        if (item.type === 'video') {
+            this.bgVideo = item.el;
+            this.bgImage = null;
+            this.bgVideo.play().catch(() => {});
+        } else {
+            this.bgImage = item.el;
+            this.bgVideo = null;
+        }
+        this.updatePlaylistUI();
     }
     renderVisuals() {
         this.ctx.save();
@@ -497,10 +543,15 @@ class VisualizerApp {
                     const h = (val / 255) * this.height * 0.6;
                     const opacity = 0.5 + (val / 510);
                     this.ctx.fillStyle = `hsla(${hue + i*2}, 80%, 60%, ${opacity})`;
-                    this.ctx.shadowBlur = isBeat ? 20 : 5;
-                    this.ctx.shadowColor = `hsl(${hue + i*2}, 80%, 60%)`;
+                    if (isBeat) {
+                        this.ctx.shadowBlur = 15;
+                        this.ctx.shadowColor = `hsl(${hue + i*2}, 80%, 60%)`;
+                    } else {
+                        this.ctx.shadowBlur = 0;
+                    }
                     this.ctx.fillRect(i * barW, this.height/2 - h/2, barW - 4, h);
                 }
+                this.ctx.shadowBlur = 0;
                 break;
 
             case 'cyber_grid':
@@ -720,25 +771,30 @@ class VisualizerApp {
         if (!this.config.glitch.enabled) return;
         const isBeat = this.bassLevel > this.config.bassThreshold;
         if (isBeat && this.config.glitch.zoom) {
-            const z = 1.02;
+            const z = 1.04;
             this.ctx.drawImage(this.canvas, -this.width*(z-1)/2, -this.height*(z-1)/2, this.width * z, this.height * z);
         }
         if (isBeat && this.config.glitch.rgbAmount > 0) {
             const amt = this.config.glitch.rgbAmount;
             const offset = amt * (this.config.glitch.rgbChaos ? (Math.random()*2-1) : 1);
-            this.ctx.save(); this.ctx.globalCompositeOperation = 'screen';
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'screen';
             this.ctx.globalAlpha = this.config.glitch.rgbIntensity / 100;
-            if (this.config.glitch.rgbMode === 'horizontal') this.ctx.drawImage(this.canvas, offset, 0);
-            else if (this.config.glitch.rgbMode === 'vertical') this.ctx.drawImage(this.canvas, 0, offset);
-            else this.ctx.drawImage(this.canvas, offset, offset);
+            if (this.config.glitch.rgbMode === 'horizontal') {
+                this.ctx.drawImage(this.canvas, offset, 0);
+            } else if (this.config.glitch.rgbMode === 'vertical') {
+                this.ctx.drawImage(this.canvas, 0, offset);
+            } else {
+                this.ctx.drawImage(this.canvas, offset, offset);
+            }
             this.ctx.restore();
         }
         if (isBeat && this.config.glitch.sliceDensity > 0) {
             const density = this.config.glitch.sliceDensity;
-            const shiftAmt = this.config.glitch.sliceShift;
+            const shiftAmt = (this.config.glitch.sliceShift / 100) * this.width;
             const h = this.height / density;
             for(let i=0; i<density; i++) {
-                const shift = (Math.random()-0.5) * shiftAmt * 2;
+                const shift = (Math.random()-0.5) * shiftAmt;
                 this.ctx.drawImage(this.canvas, 0, i*h, this.width, h, shift, i*h, this.width, h);
             }
         }
@@ -760,8 +816,13 @@ class VisualizerApp {
         if (!this.config.laser.active) return;
         this.ctx.save();
         this.ctx.strokeStyle = this.config.laser.color;
+        if (this.config.laser.color === '#a413ec') {
+            this.ctx.strokeStyle = `hsl(${this.config.themeHue}, 100%, 50%)`;
+        }
         this.ctx.lineWidth = this.config.laser.thickness;
-        this.ctx.globalAlpha = 0.5;
+        this.ctx.globalAlpha = 0.6;
+        this.ctx.shadowBlur = 15;
+        this.ctx.shadowColor = this.ctx.strokeStyle;
         const count = this.config.laser.count;
         const speed = this.config.laser.speed / 100;
         const preset = this.config.laser.preset;
@@ -802,11 +863,25 @@ class VisualizerApp {
     }
     renderStrobe() {
         if (!this.config.strobe.active) return;
+        const isBeat = this.bassLevel > this.config.bassThreshold;
         const interval = 1000 / this.config.strobe.speed;
-        if (Date.now() - this.config.strobe.lastFlash > interval) {
-            this.ctx.save(); this.ctx.fillStyle = this.config.strobe.color;
-            this.ctx.globalAlpha = 0.2; this.ctx.fillRect(0,0,this.width, this.height); this.ctx.restore();
-            this.config.strobe.lastFlash = Date.now();
+        const now = Date.now();
+        if (now - this.config.strobe.lastFlash > interval) {
+            let flashProb = 1.0;
+            // High reactivity makes strobe more likely to fire on beat
+            if (isBeat) flashProb = 1.0;
+            else flashProb = 0.3;
+
+            if (Math.random() < flashProb) {
+                this.ctx.save();
+                let color = this.config.strobe.color;
+                if (color === '#a413ec') color = `hsl(${this.config.themeHue}, 100%, 50%)`;
+                this.ctx.fillStyle = color;
+                this.ctx.globalAlpha = isBeat ? 0.4 : 0.15;
+                this.ctx.fillRect(0, 0, this.width, this.height);
+                this.ctx.restore();
+            }
+            this.config.strobe.lastFlash = now;
         }
     }
     animate() {
@@ -866,7 +941,7 @@ class VisualizerApp {
         const labels = { 'background': 'Фоновый контент', 'visuals': 'Визуализация', 'logo': 'Логотип и центр', 'text': 'Текстовый слой', 'lasers': 'Лазерное шоу', 'glitch': 'Пост-эффекты (Глитч)' };
         const icons = { 'background': 'wallpaper', 'visuals': 'equalizer', 'logo': 'diamond', 'text': 'title', 'lasers': 'all_inclusive', 'glitch': 'splitscreen' };
         const types = { 'background': 'Media', 'visuals': 'Generative', 'logo': 'Image', 'text': 'Text', 'lasers': 'Generative', 'glitch': 'FX' };
-        
+
         // Render order: last in array is top-most. UI: top-most should be first in list.
         const uiOrder = [...this.config.layerOrder].reverse();
         uiOrder.forEach((id, idx) => {
@@ -911,6 +986,45 @@ class VisualizerApp {
                 <div class="space-y-1"><label class="text-[10px] font-bold uppercase text-slate-500">Масштаб Y</label><input class="w-full bg-[#161118] border-none rounded p-1.5 text-xs text-center font-mono" type="number" value="100"/></div>
             </div>
         `;
+    }
+    updatePlaylistUI() {
+        const list = document.getElementById('playlist-list');
+        if (!list) return;
+        list.innerHTML = '';
+        this.config.playlist.items.forEach((item, idx) => {
+            const div = document.createElement('div');
+            const isActive = idx === this.config.playlist.index;
+            div.className = `text-[8px] p-1.5 rounded border flex justify-between items-center uppercase font-bold transition-all ${isActive ? 'bg-primary/20 border-primary text-white' : 'bg-[#161118] border-[#332839] text-slate-400 hover:border-slate-500'}`;
+            div.innerHTML = `
+                <div class="flex items-center gap-2 cursor-pointer flex-1">
+                    <span class="material-symbols-outlined text-[10px]">${item.type === 'video' ? 'movie' : 'image'}</span>
+                    <span class="truncate max-w-[100px]">${item.name}</span>
+                </div>
+                <button class="delete-item text-red-500 hover:text-red-400 ml-2">
+                    <span class="material-symbols-outlined text-[12px]">delete</span>
+                </button>
+            `;
+            div.onclick = (e) => {
+                if (!e.target.closest('.delete-item')) {
+                    this.config.playlist.index = idx;
+                    this.switchToPlaylistItem(idx);
+                }
+            };
+            div.querySelector('.delete-item').onclick = (e) => {
+                e.stopPropagation();
+                this.config.playlist.items.splice(idx, 1);
+                if (this.config.playlist.index >= this.config.playlist.items.length) {
+                    this.config.playlist.index = Math.max(0, this.config.playlist.items.length - 1);
+                }
+                if (this.config.playlist.items.length === 0) {
+                    this.bgImage = null; this.bgVideo = null;
+                } else if (isActive) {
+                    this.switchToPlaylistItem(this.config.playlist.index);
+                }
+                this.updatePlaylistUI();
+            };
+            list.appendChild(div);
+        });
     }
     attachListeners() {
         const setVal = (path, val) => {
@@ -1015,23 +1129,26 @@ class VisualizerApp {
         bind('bloom-radius', 'bloom.radius', null); bind('bloom-intensity', 'bloom.intensity', null);
         document.getElementById('fs-toggle').onchange = (e) => { if (e.target.checked) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); };
         document.getElementById('reset-btn').onclick = () => location.reload();
+
         const addToPlaylist = (el, type, name) => {
             this.config.playlist.items.push({ el, type, name });
-            const list = document.getElementById('playlist-list');
-            const item = document.createElement('div');
-            item.className = "text-[8px] bg-[#161118] p-1 rounded border border-[#332839] flex justify-between uppercase font-bold";
-            item.innerHTML = `<span>${name}</span><span class="text-primary">${type}</span>`;
-            list.appendChild(item);
-            if (!this.bgImage && !this.bgVideo) { if (type === 'video') this.bgVideo = el; else this.bgImage = el; }
+            this.updatePlaylistUI();
+            if (!this.bgImage && !this.bgVideo) {
+                this.switchToPlaylistItem(this.config.playlist.items.length - 1);
+            }
         };
+
         document.getElementById('bg-upload').onchange = (e) => {
             const file = e.target.files[0]; if (file) {
-                const img = new Image(); img.onload = () => { this.bgImage = img; this.bgVideo = null; addToPlaylist(img, 'img', file.name); }; img.src = URL.createObjectURL(file);
+                const img = new Image(); img.onload = () => { addToPlaylist(img, 'img', file.name); }; img.src = URL.createObjectURL(file);
             }
         };
         document.getElementById('video-upload').onchange = (e) => {
             const file = e.target.files[0]; if (file) {
-                const vid = document.createElement('video'); vid.src = URL.createObjectURL(file); vid.loop = true; vid.muted = true; vid.oncanplay = () => { vid.play(); addToPlaylist(vid, 'video', file.name); }; this.bgVideo = vid; this.bgImage = null;
+                const vid = document.createElement('video');
+                vid.style.position = 'fixed'; vid.style.pointerEvents = 'none'; vid.style.opacity = '0';
+                document.body.appendChild(vid);
+                vid.src = URL.createObjectURL(file); vid.loop = true; vid.muted = true; vid.oncanplay = () => { vid.play(); addToPlaylist(vid, 'video', file.name); };
             }
         };
         document.getElementById('playlist-next').onclick = () => {
