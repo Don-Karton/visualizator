@@ -1,0 +1,1731 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizer Pro v2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Orbitron:wght@400;700&display=swap');
+
+        body {
+            background-color: #000;
+            color: #eee;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            margin: 0;
+            user-select: none; /* Prevent text selection on click */
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Control Panel Styles */
+        #controls {
+            position: fixed;
+            top: 0;
+            right: -450px; /* Hidden by default */
+            width: 450px;
+            height: 100vh;
+            background: rgba(10, 10, 15, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 50;
+            border-left: 1px solid #333;
+            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.8);
+        }
+
+        #controls.active {
+            right: 0;
+        }
+
+        /* Custom Scrollbar */
+        .scroll-content {
+            overflow-y: auto;
+            flex: 1;
+            padding: 1.5rem;
+        }
+        .scroll-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scroll-content::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 3px;
+        }
+
+        /* Range Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #333;
+            border-radius: 2px;
+        }
+
+        .section-header {
+            font-family: 'Orbitron', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+            color: #3b82f6;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .control-group {
+            background: rgba(255,255,255,0.03);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* Tabs */
+        .tabs-header {
+            display: flex;
+            background: #0f0f13;
+            border-bottom: 1px solid #333;
+        }
+        .nav-tab {
+            flex: 1;
+            padding: 15px 0;
+            text-align: center;
+            cursor: pointer;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #888;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+            text-transform: uppercase;
+        }
+        .nav-tab:hover {
+            color: #ccc;
+            background: rgba(255,255,255,0.02);
+        }
+        .nav-tab.active {
+            color: #3b82f6;
+            border-bottom: 2px solid #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Start Overlay */
+        #start-overlay {
+            position: fixed;
+            inset: 0;
+            background: black;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .glitch-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 4rem;
+            font-weight: bold;
+            position: relative;
+            color: white;
+            text-shadow: 2px 2px 0px #ff00ff, -2px -2px 0px #00ffff;
+            animation: glitch-anim 2s infinite linear alternate-reverse;
+        }
+
+        @keyframes glitch-anim {
+            0% { text-shadow: 2px 2px 0px #ff00ff, -2px -2px 0px #00ffff; }
+            25% { text-shadow: -2px 2px 0px #ff00ff, 2px -2px 0px #00ffff; }
+            50% { text-shadow: 2px -2px 0px #ff00ff, -2px 2px 0px #00ffff; transform: translate(1px, 1px); }
+            75% { text-shadow: -2px -2px 0px #ff00ff, 2px 2px 0px #00ffff; transform: translate(-1px, -1px); }
+            100% { text-shadow: 2px 2px 0px #ff00ff, -2px -2px 0px #00ffff; }
+        }
+        
+        .tab-btn {
+            padding: 6px 10px;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            background: #222;
+            border: 1px solid #333;
+        }
+        .tab-btn.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+        }
+        
+        .sub-label {
+            font-size: 0.65rem;
+            color: #888;
+            margin-bottom: 4px;
+            display: block;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        /* Checkbox wrapper */
+        .check-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .check-wrap input {
+            accent-color: #3b82f6;
+            width: 16px;
+            height: 16px;
+        }
+        .check-wrap span {
+            font-size: 0.8rem;
+            color: #ccc;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Start Overlay -->
+    <div id="start-overlay">
+        <div class="glitch-text">VISUALIZER</div>
+        <p class="text-gray-400 mt-4 text-lg">Кликните для запуска</p>
+        <div class="text-gray-600 text-sm mt-4 border border-gray-800 p-3 rounded bg-gray-900/50">
+            <p><i class="fas fa-mouse-pointer mr-2"></i> Клик / <span class="border border-gray-600 px-1 rounded text-xs">Q</span> - Настройки</p>
+        </div>
+    </div>
+
+    <!-- Canvas -->
+    <div id="canvas-container">
+        <canvas id="visualizer"></canvas>
+    </div>
+
+    <!-- Control Panel -->
+    <div id="controls">
+        <div class="p-6 pb-2 border-b border-gray-800 flex justify-between items-center">
+            <h2 class="text-xl font-bold font-orbitron text-white">Console <span class="text-blue-500">v2</span></h2>
+            <div class="text-xs text-gray-500 border border-gray-800 px-2 py-1 rounded">PRESS 'Q' TO HIDE</div>
+        </div>
+
+        <!-- Tabs Navigation -->
+        <div class="tabs-header">
+            <div class="nav-tab active" data-target="tab-scene">SCENE</div>
+            <div class="nav-tab" data-target="tab-content">CONTENT</div>
+            <div class="nav-tab" data-target="tab-glitch">GLITCH FX</div>
+            <div class="nav-tab" data-target="tab-light">LIGHTS</div>
+            <div class="nav-tab" data-target="tab-layers">LAYERS</div>
+        </div>
+
+        <div class="scroll-content">
+            
+            <!-- TAB: SCENE (Audio & Theme) -->
+            <div id="tab-scene" class="tab-content active">
+                <div class="control-group">
+                    <h3 class="section-header">Система</h3>
+                    <button id="fs-btn" class="w-full bg-blue-900/50 hover:bg-blue-800 border border-blue-800 text-blue-200 py-2 px-4 rounded mb-2 transition text-xs font-bold uppercase">
+                        <i class="fas fa-expand mr-2"></i> Fullscreen
+                    </button>
+                </div>
+
+                <div class="control-group">
+                    <h3 class="section-header">Audio Input</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <span class="sub-label">Gain (Чувствительность)</span>
+                            <input type="range" id="audio-gain" min="0.5" max="5.0" step="0.1" value="1.5">
+                        </div>
+                        <div>
+                            <span class="sub-label">Bass Threshold (Порог баса)</span>
+                            <input type="range" id="bass-threshold" min="100" max="255" value="170">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3 class="section-header">Visual Style</h3>
+                    <div class="flex flex-wrap gap-2 mb-4" id="category-tabs"></div>
+                    <select id="preset-select" class="w-full bg-black/40 border border-gray-700 text-gray-300 rounded p-2 text-sm mb-4 outline-none focus:border-blue-500 transition"></select>
+                    
+                    <div>
+                        <span class="sub-label">Hue Shift (Сдвиг цвета)</span>
+                        <input type="range" id="theme-hue" min="0" max="360" value="0">
+                        <div class="h-1 w-full rounded mt-1" style="background: linear-gradient(to right, red, orange, yellow, green, cyan, blue, violet, red);"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: CONTENT (Bg, Logo, Text) -->
+            <div id="tab-content" class="tab-content">
+                <!-- Background Section -->
+                <div class="control-group">
+                    <h3 class="section-header">Background Media</h3>
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <div>
+                            <span class="sub-label">Image</span>
+                            <input type="file" id="bg-upload" accept="image/*" class="text-xs w-full text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:bg-gray-800 file:text-blue-400">
+                        </div>
+                        <div>
+                            <span class="sub-label">Video</span>
+                            <input type="file" id="video-upload" accept="video/*" class="text-xs w-full text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:bg-gray-800 file:text-blue-400">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <span class="sub-label">Opacity</span>
+                        <input type="range" id="bg-opacity" min="0" max="1" step="0.05" value="0.3">
+                    </div>
+                    
+                    <div class="bg-black/30 p-3 rounded border border-gray-800">
+                        <span class="text-xs font-bold text-gray-400 block mb-2 uppercase">Background FX</span>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="check-wrap"><input type="checkbox" id="bg-pulse"> <span>Pulse (Bass)</span></label>
+                            <label class="check-wrap"><input type="checkbox" id="bg-shake"> <span>Shake</span></label>
+                            <label class="check-wrap"><input type="checkbox" id="bg-rotate"> <span>Spin</span></label>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 bg-black/30 p-3 rounded border border-gray-800">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-gray-400 uppercase">Playlist</span>
+                            <label class="check-wrap"><input type="checkbox" id="playlist-enabled"> <span class="text-[10px]">ENABLE</span></label>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <span class="sub-label text-[9px]">Slide Duration (s)</span>
+                                    <input type="range" id="playlist-duration" min="1" max="60" value="5">
+                                </div>
+                                <div class="flex items-end pb-1">
+                                    <label class="check-wrap"><input type="checkbox" id="playlist-loop" checked> <span class="text-[10px]">Loop</span></label>
+                                </div>
+                            </div>
+                            <div id="playlist-list" class="max-h-32 overflow-y-auto space-y-1 pr-1 border-t border-gray-800 pt-2">
+                                <p class="text-[9px] text-gray-600 text-center py-2">Add images or videos to start playlist</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logo Section -->
+                <div class="control-group">
+                    <h3 class="section-header">Logo / Center</h3>
+                    <input type="file" id="logo-upload" accept="image/*" class="text-xs w-full text-gray-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-gray-800 file:text-blue-400 mb-3">
+                    <div class="mb-3">
+                        <span class="sub-label">Scale</span>
+                        <input type="range" id="logo-size" min="10" max="150" value="40">
+                    </div>
+                     <div class="bg-black/30 p-3 rounded border border-gray-800">
+                        <span class="text-xs font-bold text-gray-400 block mb-2 uppercase">Logo FX</span>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="check-wrap"><input type="checkbox" id="anim-pulse-size" checked> <span>Pulse Size</span></label>
+                            <label class="check-wrap"><input type="checkbox" id="anim-pulse-glow"> <span>Glow</span></label>
+                            <label class="check-wrap"><input type="checkbox" id="anim-shake"> <span>Shake</span></label>
+                            <label class="check-wrap"><input type="checkbox" id="anim-sway"> <span>Sway</span></label>
+                        </div>
+                    </div>
+                    <div class="mt-4 bg-black/30 p-3 rounded border border-gray-800">
+                        <span class="text-xs font-bold text-gray-400 block mb-2 uppercase">Logo Equalizer</span>
+                        <div class="space-y-3">
+                            <label class="check-wrap"><input type="checkbox" id="logo-eq-enabled"> <span>Enable EQ around Logo</span></label>
+                            <div>
+                                <span class="sub-label">EQ Type</span>
+                                <select id="logo-eq-type" class="w-full bg-gray-900 text-[10px] text-gray-300 p-1 rounded border border-gray-700 mt-1">
+                                    <option value="circular">Circular</option>
+                                    <option value="square">Square</option>
+                                    <option value="particles">Particles</option>
+                                </select>
+                            </div>
+                            <div>
+                                <span class="sub-label">EQ Strength</span>
+                                <input type="range" id="logo-eq-strength" min="0" max="100" value="50">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <span class="sub-label">Padding</span>
+                                    <input type="range" id="logo-eq-padding" min="0" max="100" value="10">
+                                </div>
+                                <div>
+                                    <span class="sub-label">Corners (Rect)</span>
+                                    <input type="range" id="logo-eq-radius" min="0" max="100" value="0">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <span class="sub-label">Bars Count</span>
+                                    <input type="range" id="logo-eq-count" min="16" max="256" step="16" value="64">
+                                </div>
+                                <div>
+                                    <span class="sub-label">Bar Width</span>
+                                    <input type="range" id="logo-eq-width" min="1" max="10" value="2">
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="check-wrap"><input type="checkbox" id="logo-eq-closed" checked> <span>Closed Loop</span></label>
+                                <div class="w-32">
+                                    <span class="sub-label mt-0">Glow</span>
+                                    <input type="range" id="logo-eq-glow" min="0" max="50" value="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text Section -->
+                <div class="control-group">
+                    <h3 class="section-header">Overlay Text</h3>
+                    <input type="text" id="text-input" placeholder="Введите текст..." class="w-full bg-black/40 text-white rounded p-2 text-sm mb-3 border border-gray-700">
+                    <div class="flex gap-2">
+                         <select id="font-family" class="bg-black/40 text-gray-300 text-xs p-1 rounded border border-gray-700 flex-1">
+                            <option value="Inter">Inter</option>
+                            <option value="Orbitron">Orbitron</option>
+                            <option value="Impact">Impact</option>
+                        </select>
+                        <select id="text-pos" class="bg-black/40 text-gray-300 text-xs p-1 rounded border border-gray-700 w-24">
+                            <option value="center">Center</option>
+                            <option value="top">Top</option>
+                            <option value="bottom">Bottom</option>
+                        </select>
+                    </div>
+                    <div class="mt-3">
+                        <span class="sub-label">Animation Mode</span>
+                        <select id="text-mode" class="w-full bg-black/40 text-gray-300 text-xs p-1 rounded border border-gray-700">
+                            <option value="static">Static</option>
+                            <option value="pulse">Pulse (Bass)</option>
+                            <option value="pingpong">Ping Pong</option>
+                            <option value="float">Floating</option>
+                        </select>
+                    </div>
+                    <div class="mt-3">
+                        <span class="sub-label">Animation Speed</span>
+                        <input type="range" id="text-speed" min="0.1" max="5.0" step="0.1" value="1.0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: GLITCH (New Advanced) -->
+            <div id="tab-glitch" class="tab-content">
+                <div class="control-group border-l-2 border-red-500">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="section-header mb-0 text-red-500 border-none">MASTER GLITCH</h3>
+                        <label class="check-wrap">
+                             <input type="checkbox" id="glitch-enabled">
+                             <span class="text-xs font-bold uppercase text-white">Enable</span>
+                        </label>
+                    </div>
+
+                    <div class="space-y-4 mt-4">
+                        
+                        <!-- 1. RGB SPLIT -->
+                        <div class="bg-black/40 p-3 rounded border border-gray-800">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-xs font-bold text-red-400">RGB CHANNEL SPLIT</span>
+                                <label class="check-wrap"><input type="checkbox" id="glitch-rgb-chaos"> <span class="text-[10px]">CHAOS</span></label>
+                            </div>
+                            <span class="sub-label">Separation Amount</span>
+                            <input type="range" id="glitch-rgb-amount" min="0" max="100" value="0">
+                            
+                            <div class="mt-3 pt-2 border-t border-gray-800">
+                                <span class="sub-label text-[10px] text-gray-500">Mode:</span>
+                                <select id="glitch-rgb-mode" class="w-full bg-gray-900 text-[10px] text-gray-300 p-1 rounded border border-gray-700 mt-1">
+                                    <option value="pattern">Pattern (Red Up/Left, Blue Down/Right)</option>
+                                    <option value="horizontal">Horizontal Only</option>
+                                    <option value="vertical">Vertical Only</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 2. DISPLACEMENT / SLICE -->
+                        <div class="bg-black/40 p-3 rounded border border-gray-800">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-xs font-bold text-blue-400">PIXEL SLICING</span>
+                            </div>
+                            
+                            <span class="sub-label">Displacement Power</span>
+                            <input type="range" id="glitch-slice-amount" min="0" max="150" value="0">
+                            
+                            <div class="flex gap-2 mt-2">
+                                <div class="flex-1">
+                                    <span class="sub-label">Direction</span>
+                                    <select id="glitch-slice-dir" class="w-full bg-gray-900 text-[10px] text-gray-300 p-1 rounded border border-gray-700">
+                                        <option value="hor">Horizontal</option>
+                                        <option value="ver">Vertical</option>
+                                        <option value="mix">Mix (Combo)</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1">
+                                    <span class="sub-label">Speed</span>
+                                    <input type="range" id="glitch-slice-speed" min="1" max="20" value="10">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. NOISE -->
+                        <div class="bg-black/40 p-3 rounded border border-gray-800">
+                            <span class="text-xs font-bold text-gray-400 block mb-2">DIGITAL NOISE</span>
+                            <input type="range" id="glitch-noise-amount" min="0" max="100" value="0">
+                        </div>
+
+                        <!-- 4. BLOCKS -->
+                        <div class="bg-black/40 p-3 rounded border border-gray-800">
+                            <span class="text-xs font-bold text-green-400 block mb-2">SCATTER BLOCKS</span>
+                            <input type="range" id="glitch-block-amount" min="0" max="100" value="0">
+                        </div>
+
+                        <!-- 5. EXTRA FX -->
+                        <div class="bg-black/40 p-3 rounded border border-gray-800">
+                            <span class="text-xs font-bold text-yellow-400 block mb-2">EXTRA FX</span>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="check-wrap"><input type="checkbox" id="glitch-invert"> <span>Invert</span></label>
+                                <label class="check-wrap"><input type="checkbox" id="glitch-zoom"> <span>Beat Zoom</span></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: LIGHTS -->
+            <div id="tab-light" class="tab-content">
+                <div class="control-group">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="section-header mb-0">Strobe Light</h3>
+                        <input type="checkbox" id="strobe-active" class="h-4 w-4 accent-blue-500">
+                    </div>
+                    <div class="space-y-2 pl-2 border-l border-gray-700 ml-1">
+                         <div class="flex justify-between items-center">
+                            <span class="sub-label mt-0">Color</span>
+                            <input type="color" id="strobe-color" value="#ffffff" class="bg-transparent border-none w-6 h-6 cursor-pointer">
+                        </div>
+                        <div>
+                            <span class="sub-label">Frequency</span>
+                            <input type="range" id="strobe-speed" min="1" max="40" value="15">
+                        </div>
+                         <div>
+                            <span class="sub-label">Audio Reactivity</span>
+                            <input type="range" id="strobe-reactivity" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="section-header mb-0 text-green-400">Laser Show</h3>
+                        <input type="checkbox" id="laser-active" class="h-4 w-4 accent-green-500">
+                    </div>
+                    <div class="space-y-2 pl-2 border-l border-gray-700 ml-1">
+                        <select id="laser-preset" class="w-full bg-black/40 text-xs rounded p-2 border border-green-900/50 text-green-100">
+                            <option value="scan">Scanner (Horiz)</option>
+                            <option value="rain">Matrix Rain</option>
+                            <option value="cross">Crossfire</option>
+                            <option value="cone">Cone Emitter</option>
+                            <option value="random">Chaos Rays</option>
+                        </select>
+                        <div class="flex justify-between items-center">
+                            <span class="sub-label mt-0">Color</span>
+                            <input type="color" id="laser-color" value="#00ff00" class="bg-transparent border-none w-6 h-6 cursor-pointer">
+                        </div>
+                        <div>
+                            <span class="sub-label">Beams Count</span>
+                            <input type="range" id="laser-count" min="1" max="50" value="10">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: LAYERS -->
+            <div id="tab-layers" class="tab-content">
+                <div class="control-group">
+                    <h3 class="section-header">Layer Visibility Order</h3>
+                    <p class="text-[10px] text-gray-500 mb-3">Top layers appear above bottom layers.</p>
+                    <div id="layer-list" class="space-y-2">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+class VisualizerApp {
+    constructor() {
+        this.canvas = document.getElementById('visualizer');
+        this.ctx = this.canvas.getContext('2d', { alpha: false, desynchronized: true });
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        
+        // Audio
+        this.audioCtx = null;
+        this.analyser = null;
+        this.source = null;
+        this.dataArray = null;
+        this.bassLevel = 0;
+        this.midLevel = 0;
+        this.trebleLevel = 0;
+        
+        // Assets
+        this.bgImage = null;
+        this.bgVideo = null;
+        this.logoImage = null;
+        this.playlist = [];
+        this.playlistIndex = 0;
+        this.lastSlideTime = 0;
+        
+        // State
+        this.isRunning = false;
+        this.time = 0;
+        this.isMenuOpen = false;
+        this.textState = { x: 0, y: 0, vx: 3, vy: 3 };
+        
+        // Configuration
+        this.config = {
+            theme: 'bar_chill',
+            themeBrightness: 1, // via filter
+            themeHue: 0,
+            gain: 1.5,
+            bassThreshold: 170,
+            
+            // Background
+            bgOpacity: 0.3,
+            bgAnim: { pulse: false, shake: false, rotate: false },
+            playlistEnabled: false,
+            playlistLoop: true,
+            slideDuration: 5,
+            
+            // Content
+            logoSize: 40,
+            text: '',
+            font: 'Inter',
+            textPos: 'center',
+            textSize: 60,
+            anim: {
+                pulseSize: true,
+                pulseGlow: false,
+                shake: false,
+                sway: false,
+                textMode: 'static',
+                textSpeed: 1.0
+            },
+            logoEq: {
+                enabled: false,
+                type: 'circular',
+                strength: 50,
+                borderRadius: 0,
+                padding: 10,
+                barCount: 64,
+                barWidth: 2,
+                closed: true,
+                glow: 0
+            },
+            
+            // Advanced Glitch
+            glitch: {
+                enabled: false,
+                rgbAmount: 0,
+                rgbChaos: false,
+                rgbMode: 'pattern', // pattern, horizontal, vertical
+                noiseAmount: 0,
+                sliceAmount: 0,
+                sliceDir: 'hor', // hor, ver, mix
+                sliceSpeed: 10,
+                blockAmount: 0,
+                invert: false,
+                zoom: false
+            },
+            
+            strobe: { active: false, color: '#ffffff', speed: 15, reactivity: 0.5, lastFlash: 0 },
+            laser: { active: false, preset: 'scan', color: '#00ff00', count: 10 },
+            layerOrder: ['background', 'visuals', 'logo', 'text', 'lasers', 'glitch']
+        };
+
+        this.init();
+    }
+
+    init() {
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        
+        // Menu Toggling
+        const toggleMenu = () => {
+            const panel = document.getElementById('controls');
+            this.isMenuOpen = !this.isMenuOpen;
+            if(this.isMenuOpen) panel.classList.add('active');
+            else panel.classList.remove('active');
+        };
+
+        // Key Listener (Q)
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'q' || e.key === 'Q' || e.code === 'KeyQ') toggleMenu();
+        });
+
+        // Click Listener (Canvas only)
+        this.canvas.addEventListener('click', (e) => {
+            // Prevent accidental toggling if interacting with something else (rare in canvas)
+            toggleMenu();
+        });
+
+        // Themes
+        this.themes = this.getThemes();
+        this.populateUI();
+        this.attachListeners();
+        this.setupTabs();
+
+        document.getElementById('start-overlay').addEventListener('click', () => {
+            this.startAudio();
+            document.getElementById('start-overlay').style.display = 'none';
+        });
+    }
+
+    resize() {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+    }
+
+    async startAudio() {
+        try {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            this.analyser = this.audioCtx.createAnalyser();
+            this.analyser.fftSize = 2048; 
+            this.analyser.smoothingTimeConstant = 0.85;
+            
+            this.source = this.audioCtx.createMediaStreamSource(stream);
+            this.source.connect(this.analyser);
+            
+            const bufferLength = this.analyser.frequencyBinCount;
+            this.dataArray = new Uint8Array(bufferLength);
+            
+            this.isRunning = true;
+            this.animate();
+        } catch (err) {
+            alert("Error: " + err);
+        }
+    }
+
+    analyzeAudio() {
+        if (!this.analyser) return;
+        this.analyser.getByteFrequencyData(this.dataArray);
+        
+        let bassSum = 0, midSum = 0;
+        for(let i=0; i<10; i++) bassSum += this.dataArray[i];
+        for(let i=10; i<100; i++) midSum += this.dataArray[i];
+        
+        const g = this.config.gain;
+        this.bassLevel = Math.min((bassSum / 10) * g, 255);
+        this.midLevel = Math.min((midSum / 90) * g, 255);
+    }
+
+    getThemes() {
+        return {
+            'bar': {
+                name: "Bar / Chill",
+                presets: {
+                    'bar_chill': { name: "Warm Ambient", type: 'gradient_flow', color: [255, 150, 50] },
+                    'bar_jazz': { name: "Jazz Waves", type: 'smooth_wave', color: [100, 100, 255] },
+                    'bar_neon': { name: "Neon Sign", type: 'bars_classic', color: [0, 255, 255] }
+                }
+            },
+            'club': {
+                name: "Club / Dance",
+                presets: {
+                    'club_tunnel': { name: "Hyper Tunnel", type: 'tunnel', color: [255, 0, 255] },
+                    'club_matrix': { name: "Matrix Rain", type: 'matrix_rain', color: [0, 255, 0] },
+                    'club_bass': { name: "Bass Cannon", type: 'center_burst', color: [255, 0, 0] }
+                }
+            },
+            'concert': {
+                name: "Concert / Epic",
+                presets: {
+                    'con_stage': { name: "Stage Lights", type: 'spotlights', color: [255, 255, 200] },
+                    'con_epic': { name: "Epic EQ", type: 'bars_mirror', color: [255, 215, 0] }
+                }
+            },
+            'cyber': {
+                name: "Cyber / Future",
+                presets: {
+                    'cyber_punk': { name: "Neon City", type: 'double_eq', color: [255, 0, 80] },
+                    'cyber_grid': { name: "Grid Run", type: 'grid_pulse', color: [0, 255, 255] },
+                    'cyber_circle': { name: "Cyber Circle", type: 'circular_bars_main', color: [200, 0, 255] }
+                }
+            },
+            'space': {
+                name: "Space / Void",
+                presets: {
+                    'space_stars': { name: "Starfield", type: 'particles_move', color: [255, 255, 255] },
+                    'space_nebula': { name: "Nebula Flow", type: 'gradient_flow', color: [150, 50, 255] }
+                }
+            }
+        };
+    }
+
+    renderBackground() {
+        const bassTrigger = this.bassLevel > this.config.bassThreshold;
+        let media = null;
+
+        if (this.config.playlistEnabled && this.playlist.length > 0) {
+            const now = Date.now();
+            if (now - this.lastSlideTime > this.config.slideDuration * 1000) {
+                this.playlistIndex++;
+                if (this.playlistIndex >= this.playlist.length) {
+                    if (this.config.playlistLoop) {
+                        this.playlistIndex = 0;
+                    } else {
+                        this.playlistIndex = this.playlist.length - 1;
+                    }
+                }
+                this.lastSlideTime = now;
+                // Manage video playback
+                this.playlist.forEach((item, idx) => {
+                    if (item.type === 'video') {
+                        if (idx === this.playlistIndex) item.element.play();
+                        else item.element.pause();
+                    }
+                });
+            }
+            media = this.playlist[this.playlistIndex].element;
+        } else {
+            media = this.bgVideo || this.bgImage;
+        }
+
+        if (media) {
+            const isVideo = media.tagName === 'VIDEO';
+            const mw = isVideo ? media.videoWidth : media.width;
+            const mh = isVideo ? media.videoHeight : media.height;
+
+            if (mw && mh) {
+                this.ctx.save();
+                const cx = this.width / 2;
+                const cy = this.height / 2;
+                
+                // BG FX Transform
+                let scale = Math.max(this.width / mw, this.height / mh);
+                let tx = cx, ty = cy;
+                let rot = 0;
+
+                if (this.config.bgAnim.pulse && bassTrigger) scale *= 1.05;
+                if (this.config.bgAnim.shake && bassTrigger) {
+                    tx += (Math.random()-0.5) * 20;
+                    ty += (Math.random()-0.5) * 20;
+                }
+                if (this.config.bgAnim.rotate) {
+                    rot = this.time * 0.002;
+                }
+
+                this.ctx.translate(tx, ty);
+                this.ctx.rotate(rot);
+                this.ctx.scale(scale, scale);
+                
+                this.ctx.globalAlpha = this.config.bgOpacity;
+                this.ctx.drawImage(media, -mw/2, -mh/2, mw, mh);
+                this.ctx.restore();
+            }
+        }
+    }
+
+    renderVisuals() {
+        let presetData = null;
+        for(let c in this.themes) {
+            if(this.themes[c].presets[this.config.theme]) {
+                presetData = this.themes[c].presets[this.config.theme];
+                break;
+            }
+        }
+        if(!presetData) return;
+
+        // Apply Theme Hue
+        const baseColor = presetData.color;
+        let colorStr;
+        if(this.config.themeHue > 0) colorStr = `hsl(${this.config.themeHue}, 70%, 50%)`;
+        else colorStr = `rgb(${baseColor[0]},${baseColor[1]},${baseColor[2]})`;
+
+        this.ctx.fillStyle = colorStr;
+        this.ctx.strokeStyle = colorStr;
+        this.ctx.shadowBlur = 10;
+        this.ctx.shadowColor = colorStr;
+
+        // --- Simplified Rendering Logic for Demo ---
+        const type = presetData.type;
+        const cx = this.width/2, cy = this.height/2;
+        const bass = this.bassLevel;
+        
+        if (type === 'bars_classic' || type === 'bars_mirror') {
+             const barW = (this.width / 64);
+             for(let i=0; i<64; i++) {
+                 const h = (this.dataArray[i] / 255) * (this.height * 0.6);
+                 if(type === 'bars_mirror') {
+                     this.ctx.fillRect(cx + i*barW, cy - h/2, barW-1, h);
+                     this.ctx.fillRect(cx - i*barW, cy - h/2, barW-1, h);
+                 } else {
+                     this.ctx.fillRect(i * barW * 2, this.height - h, barW * 2 - 2, h);
+                 }
+             }
+        }
+        else if (type === 'double_eq') {
+            const barW = (this.width / 128);
+            for(let i=0; i<128; i++) {
+                const h = (this.dataArray[i] / 255) * (this.height * 0.4);
+                this.ctx.fillRect(i * barW, 0, barW-1, h);
+                this.ctx.fillRect(i * barW, this.height - h, barW-1, h);
+            }
+        }
+        else if (type === 'tunnel' || type === 'center_burst') {
+            const r = 50 + (bass * 0.5);
+            this.ctx.beginPath(); this.ctx.arc(cx, cy, r, 0, Math.PI*2); this.ctx.stroke();
+            this.ctx.beginPath(); this.ctx.arc(cx, cy, r*1.5, 0, Math.PI*2); this.ctx.stroke();
+            if(type === 'center_burst' && bass > 200) {
+                for(let i=0; i<8; i++) {
+                    const angle = (i/8) * Math.PI * 2;
+                    this.ctx.moveTo(cx, cy);
+                    this.ctx.lineTo(cx + Math.cos(angle)*this.width, cy + Math.sin(angle)*this.width);
+                }
+                this.ctx.stroke();
+            }
+        }
+        else if (type === 'grid_pulse') {
+            const size = 50;
+            const cols = Math.ceil(this.width / size);
+            const rows = Math.ceil(this.height / size);
+            for(let x=0; x<cols; x++) {
+                for(let y=0; y<rows; y++) {
+                    const dist = Math.sqrt((x*size-cx)**2 + (y*size-cy)**2);
+                    const v = this.dataArray[Math.floor(dist/10)%128];
+                    const op = v / 255;
+                    this.ctx.globalAlpha = op;
+                    this.ctx.strokeRect(x*size, y*size, size-2, size-2);
+                }
+            }
+            this.ctx.globalAlpha = 1;
+        }
+        else if (type === 'particles_move') {
+            if(!this.particles) {
+                this.particles = Array.from({length: 100}, () => ({
+                    x: Math.random() * this.width,
+                    y: Math.random() * this.height,
+                    s: Math.random() * 2 + 1,
+                    v: Math.random() * 0.5 + 0.1
+                }));
+            }
+            this.ctx.fillStyle = colorStr;
+            this.particles.forEach((p, i) => {
+                const freq = this.dataArray[i % 128] / 255;
+                p.y -= p.v * (1 + freq * 10);
+                if(p.y < 0) p.y = this.height;
+                this.ctx.beginPath();
+                this.ctx.arc(p.x, p.y, p.s + freq * 5, 0, Math.PI*2);
+                this.ctx.fill();
+            });
+        }
+        else if (type === 'circular_bars_main') {
+            const radius = Math.min(this.width, this.height) * 0.3 + (bass * 0.1);
+            const bins = 128;
+            for (let i = 0; i < bins; i++) {
+                const angle = (i / bins) * Math.PI * 2;
+                const val = (this.dataArray[i % 128] / 255) * 150;
+                const x1 = cx + Math.cos(angle) * radius;
+                const y1 = cy + Math.sin(angle) * radius;
+                const x2 = cx + Math.cos(angle) * (radius + val);
+                const y2 = cy + Math.sin(angle) * (radius + val);
+                this.ctx.beginPath();
+                this.ctx.moveTo(x1, y1);
+                this.ctx.lineTo(x2, y2);
+                this.ctx.stroke();
+            }
+        }
+        else if (type === 'matrix_rain') {
+             const fontSize = 16;
+             const columns = Math.floor(this.width / fontSize);
+             if(!this.matrixDrops) this.matrixDrops = Array(columns).fill(1);
+             
+             this.ctx.font = fontSize + "px monospace";
+             for(let i=0; i<this.matrixDrops.length; i++) {
+                 const v = this.dataArray[i % 128] / 255;
+                 const text = String.fromCharCode(0x30A0 + Math.random() * 33);
+                 this.ctx.fillText(text, i * fontSize, this.matrixDrops[i] * fontSize);
+                 
+                 if(this.matrixDrops[i] * fontSize > this.height && Math.random() > 0.975)
+                     this.matrixDrops[i] = 0;
+                 
+                 this.matrixDrops[i] += (0.5 + v * 2);
+             }
+        }
+        else {
+             // Generic wave
+             this.ctx.beginPath();
+             for(let i=0; i<this.width; i+=20) {
+                 const v = this.dataArray[i%100];
+                 const y = cy + Math.sin(i*0.01 + this.time*0.1) * v;
+                 this.ctx.lineTo(i,y);
+             }
+             this.ctx.stroke();
+        }
+        this.ctx.shadowBlur = 0;
+    }
+
+    renderLogo() {
+        const cx = this.width / 2, cy = this.height / 2;
+        let x = cx, y = cy;
+        const anim = this.config.anim;
+        const bassTrigger = this.bassLevel > this.config.bassThreshold;
+
+        if (anim.shake && bassTrigger) {
+            x += (Math.random() - 0.5) * 30;
+            y += (Math.random() - 0.5) * 30;
+        }
+        if (anim.sway) x += Math.sin(this.time * 0.05) * 20;
+
+        this.ctx.save();
+        this.ctx.translate(x, y);
+
+        if (anim.pulseSize) {
+            const s = 1 + (this.bassLevel / 255) * 0.4;
+            this.ctx.scale(s, s);
+        }
+
+        // Logo Equalizer
+        if (this.config.logoEq.enabled && this.dataArray) {
+            const eq = this.config.logoEq;
+            const h = (this.height * (this.config.logoSize / 100));
+            const w = h * (this.logoImage ? (this.logoImage.width / this.logoImage.height) : 1);
+            const strength = eq.strength / 50;
+            const bins = Math.min(eq.barCount, this.dataArray.length);
+            const step = Math.floor(this.dataArray.length / bins);
+            const padding = eq.padding;
+            const barW = eq.barWidth;
+            
+            this.ctx.save();
+            let eqColor;
+            if(this.config.themeHue > 0) eqColor = `hsl(${this.config.themeHue}, 80%, 60%)`;
+            else eqColor = 'white';
+            
+            this.ctx.strokeStyle = eqColor;
+            this.ctx.fillStyle = eqColor;
+            this.ctx.lineWidth = barW;
+
+            if (eq.glow > 0) {
+                this.ctx.shadowBlur = eq.glow;
+                this.ctx.shadowColor = eqColor;
+            }
+
+            if (eq.type === 'circular') {
+                const radius = Math.max(w, h) / 2 + padding;
+                for (let i = 0; i < bins; i++) {
+                    const angle = (i / bins) * Math.PI * 2;
+                    const val = (this.dataArray[i * step] / 255) * 60 * strength;
+                    const x1 = Math.cos(angle) * radius;
+                    const y1 = Math.sin(angle) * radius;
+                    const x2 = Math.cos(angle) * (radius + val);
+                    const y2 = Math.sin(angle) * (radius + val);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x1, y1);
+                    this.ctx.lineTo(x2, y2);
+                    this.ctx.stroke();
+                }
+                if (eq.closed) {
+                    this.ctx.beginPath();
+                    this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                }
+            } else if (eq.type === 'square') {
+                const rectW = w + padding * 2;
+                const rectH = h + padding * 2;
+                const r = eq.borderRadius;
+                
+                // Draw bars on 4 sides
+                for(let i=0; i<bins; i++) {
+                    const val = (this.dataArray[i * step] / 255) * 40 * strength;
+                    const side = Math.floor(i / (bins/4));
+                    const pos = (i % (bins/4)) / (bins/4);
+                    
+                    let bx1, by1, bx2, by2;
+                    if(side === 0) { // Top
+                        bx1 = -rectW/2 + pos * rectW; by1 = -rectH/2;
+                        bx2 = bx1; by2 = by1 - val;
+                    } else if (side === 1) { // Right
+                        bx1 = rectW/2; by1 = -rectH/2 + pos * rectH;
+                        bx2 = bx1 + val; by2 = by1;
+                    } else if (side === 2) { // Bottom
+                        bx1 = rectW/2 - pos * rectW; by1 = rectH/2;
+                        bx2 = bx1; by2 = by1 + val;
+                    } else { // Left
+                        bx1 = -rectW/2; by1 = rectH/2 - pos * rectH;
+                        bx2 = bx1 - val; by2 = by1;
+                    }
+                    
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(bx1, by1);
+                    this.ctx.lineTo(bx2, by2);
+                    this.ctx.stroke();
+                }
+
+                if (eq.closed) {
+                    this.ctx.beginPath();
+                    this.ctx.roundRect(-rectW/2, -rectH/2, rectW, rectH, r);
+                    this.ctx.stroke();
+                }
+            } else if (eq.type === 'particles') {
+                const radius = Math.max(w, h) / 2 + padding;
+                for(let i=0; i<bins; i++) {
+                    const angle = (i / bins) * Math.PI * 2 + this.time * 0.01;
+                    const val = (this.dataArray[i * step] / 255);
+                    const dist = radius + val * 100 * strength;
+                    const px = Math.cos(angle) * dist;
+                    const py = Math.sin(angle) * dist;
+                    this.ctx.beginPath();
+                    this.ctx.arc(px, py, barW + val * 3, 0, Math.PI*2);
+                    this.ctx.fill();
+                }
+            }
+            this.ctx.restore();
+        }
+
+        // Logo
+        if (this.logoImage) {
+            const h = (this.height * (this.config.logoSize / 100));
+            const w = h * (this.logoImage.width / this.logoImage.height);
+            
+            if (anim.pulseGlow) {
+                const glowIntensity = (this.bassLevel / 255);
+                this.ctx.shadowBlur = 15 + glowIntensity * 30;
+                
+                let glowColor;
+                if(this.config.themeHue > 0) {
+                    glowColor = `hsl(${this.config.themeHue}, 100%, 50%)`;
+                } else {
+                    glowColor = 'white';
+                }
+                this.ctx.shadowColor = glowColor;
+            }
+
+            this.ctx.drawImage(this.logoImage, -w/2, -h/2, w, h);
+            this.ctx.shadowBlur = 0;
+        }
+        this.ctx.restore();
+    }
+
+    renderText() {
+        const anim = this.config.anim;
+        const bassTrigger = this.bassLevel > this.config.bassThreshold;
+        const speed = anim.textSpeed;
+
+        if (this.config.text) {
+            this.ctx.save();
+            this.ctx.font = `bold ${this.config.textSize}px "${this.config.font}"`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillStyle = 'white';
+
+            let tx = this.width/2, ty = this.height/2;
+            const mode = anim.textMode;
+
+            if (mode === 'static') {
+                if(this.config.textPos === 'top') ty = this.height * 0.15;
+                else if(this.config.textPos === 'bottom') ty = this.height * 0.85;
+            } else if (mode === 'float') {
+                ty += Math.sin(this.time * 0.05 * speed) * 50;
+                tx += Math.cos(this.time * 0.03 * speed) * 30;
+            } else if (mode === 'pingpong') {
+                this.textState.x += this.textState.vx * speed;
+                this.textState.y += this.textState.vy * speed;
+
+                const limitX = this.width / 2 - 100;
+                const limitY = this.height / 2 - 50;
+
+                if (Math.abs(this.textState.x) > limitX) this.textState.vx *= -1;
+                if (Math.abs(this.textState.y) > limitY) this.textState.vy *= -1;
+
+                tx += this.textState.x;
+                ty += this.textState.y;
+            } else if (mode === 'pulse') {
+                const s = 1 + (this.bassLevel / 255) * 0.5;
+                this.ctx.translate(tx, ty);
+                this.ctx.scale(s, s);
+                tx = 0; ty = 0;
+            }
+
+            if(anim.pulseGlow && bassTrigger) {
+                this.ctx.shadowBlur = 20;
+                this.ctx.shadowColor = 'white';
+            }
+            this.ctx.fillText(this.config.text, tx, ty);
+            this.ctx.restore();
+        }
+    }
+
+    renderLasers() {
+        if(!this.config.laser.active) return;
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'screen';
+        this.ctx.strokeStyle = this.config.laser.color;
+        this.ctx.lineWidth = 2;
+        
+        const count = this.config.laser.count;
+        const preset = this.config.laser.preset;
+        const beat = this.bassLevel > this.config.bassThreshold;
+
+        // Simple line drawing logic for efficiency
+        this.ctx.beginPath();
+        if(preset === 'scan') {
+             const y = this.height/2 + Math.sin(this.time*0.1)*200;
+             this.ctx.moveTo(0,y); this.ctx.lineTo(this.width,y);
+        } else if (preset === 'random' && beat) {
+            for(let i=0; i<count; i++) {
+                this.ctx.moveTo(Math.random()*this.width, Math.random()*this.height);
+                this.ctx.lineTo(Math.random()*this.width, Math.random()*this.height);
+            }
+        }
+        this.ctx.stroke();
+        this.ctx.restore();
+    }
+
+    applyGlitch() {
+        const g = this.config.glitch;
+        if(!g.enabled) return;
+
+        const beat = this.bassLevel > this.config.bassThreshold;
+        // Effect chance: High on beat, low otherwise
+        const chance = beat ? 0.9 : 0.05; 
+        if (Math.random() > chance && !beat) return;
+
+        this.ctx.save();
+
+        // 1. ADVANCED RGB SPLIT
+        if (g.rgbAmount > 0) {
+            const shift = g.rgbAmount * (beat ? 1.5 : 0.5);
+            let rx=0, ry=0, gx=0, gy=0, bx=0, by=0;
+
+            if (g.rgbChaos) {
+                // Total chaos
+                rx = (Math.random()-0.5)*shift; ry = (Math.random()-0.5)*shift;
+                gx = (Math.random()-0.5)*shift; gy = (Math.random()-0.5)*shift;
+                bx = (Math.random()-0.5)*shift; by = (Math.random()-0.5)*shift;
+            } else if (g.rgbMode === 'pattern') {
+                // User requested: Red Left/Up, Blue Right/Down, Green Down
+                rx = -shift; ry = -shift;
+                bx = shift;  by = shift;
+                gx = 0;      gy = shift;
+            } else if (g.rgbMode === 'horizontal') {
+                rx = -shift; bx = shift;
+            } else {
+                ry = -shift; by = shift;
+            }
+
+            // Technique: Draw Red, Green, Blue channels separately using Composite
+            this.ctx.globalCompositeOperation = 'screen'; // Additive blending for RGB
+
+            // Since we can't easily extract channels, we use a trick:
+            // We draw the full canvas shifted and tinted. 
+            // Note: True channel separation is slow in 2D. We simulate it.
+            
+            // Draw Red tint shifted
+            // this.ctx.drawImage(this.canvas, rx, ry); -> this draws full color.
+            
+            // Simulation: 
+            // 1. Get image. 2. Draw it 3 times with multiply colors? No, multiply darkens.
+            // Standard Glitch Trick:
+            // Draw Copy at Offset 1 with RED globalAlpha? No.
+            // Best performant trick: 
+            // Draw a copy of the screen at offset, with exclusion or difference, then restore?
+            // Let's use the 'lighter' trick with specific colored overlays.
+            
+            // Actually, simply drawing the canvas again with `globalAlpha = 0.5` and `composite = screen` 
+            // at offsets creates a very close approximation of RGB split (Chromatic Aberration).
+            // To make it colored, we need to tint.
+            // But we can't tint drawImage in Canvas 2D easily.
+            
+            // Fallback to simple displacement for performance, but distinct directions
+            // We will just do 2 extra passes:
+            // 1. Red pass (simulated by drawing, then drawing a cyan rect over it? too slow)
+            
+            // "Poor man's" RGB Split for 60FPS:
+            // Draw the current canvas state into the future frame at offset
+            const temp = this.canvas; 
+            
+            this.ctx.globalCompositeOperation = 'lighter';
+            
+            // Red Shift simulation (Draws brighter version)
+            this.ctx.globalAlpha = 0.5;
+            this.ctx.fillStyle = 'red'; // Doesn't affect drawImage
+            // Real trick:
+            // Just offset the whole image.
+            this.ctx.drawImage(temp, rx, ry);
+            this.ctx.drawImage(temp, bx, by);
+            // This creates a blurry/bright ghosting which looks like RGB glitch.
+        }
+
+        // 2. SLICING (STRIPS)
+        if (g.sliceAmount > 0) {
+            const slices = Math.floor(g.sliceSpeed); // Use speed as count or frequency
+            const maxOff = g.sliceAmount;
+            
+            for(let i=0; i<slices; i++) {
+                // Decide direction based on mix
+                let dir = g.sliceDir;
+                if(dir === 'mix') dir = Math.random() > 0.5 ? 'hor' : 'ver';
+                
+                const offset = (Math.random() - 0.5) * maxOff;
+
+                if (dir === 'hor') {
+                    const h = Math.random() * (this.height/4);
+                    const y = Math.random() * this.height;
+                    this.ctx.drawImage(this.canvas, 0, y, this.width, h, offset, y, this.width, h);
+                } else {
+                    const w = Math.random() * (this.width/4);
+                    const x = Math.random() * this.width;
+                    this.ctx.drawImage(this.canvas, x, 0, w, this.height, x, offset, w, this.height);
+                }
+            }
+        }
+
+        // 3. NOISE
+        if (g.noiseAmount > 0) {
+            const h = this.height * (g.noiseAmount / 100);
+            const y = Math.random() * this.height;
+            // Draw a strip of inverted color or white noise
+            this.ctx.globalCompositeOperation = 'difference';
+            this.ctx.fillStyle = `rgb(${Math.random()*255},${Math.random()*255},${Math.random()*255})`;
+            this.ctx.fillRect(0, y, this.width, Math.random() * 50);
+        }
+
+        // 4. BLOCKS
+        if (g.blockAmount > 0) {
+            const size = 50 + Math.random()*100;
+            const cnt = 5;
+            for(let i=0; i<cnt; i++){
+                const sx = Math.random() * this.width;
+                const sy = Math.random() * this.height;
+                const dx = sx + (Math.random()-0.5) * g.blockAmount * 2;
+                const dy = sy + (Math.random()-0.5) * g.blockAmount * 2;
+                this.ctx.drawImage(this.canvas, sx, sy, size, size, dx, dy, size, size);
+            }
+        }
+
+        // 5. INVERT
+        if (g.invert && Math.random() > 0.9) {
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'difference';
+            this.ctx.fillStyle = 'white';
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            this.ctx.restore();
+        }
+
+        // 6. ZOOM
+        if (g.zoom && beat && Math.random() > 0.8) {
+            this.ctx.drawImage(this.canvas, -20, -20, this.width + 40, this.height + 40);
+        }
+
+        this.ctx.restore();
+    }
+
+    animate() {
+        if(!this.isRunning) return;
+        this.time++;
+        this.analyzeAudio();
+
+        // Clear canvas
+        this.ctx.fillStyle = '#000';
+        this.ctx.fillRect(0,0,this.width, this.height);
+
+        // Iterate through layer order
+        this.config.layerOrder.forEach(layerId => {
+            switch(layerId) {
+                case 'background':
+                    this.renderBackground();
+                    break;
+                case 'visuals':
+                    this.ctx.save();
+                    this.renderVisuals();
+                    this.ctx.restore();
+                    break;
+                case 'logo':
+                    this.renderLogo();
+                    break;
+                case 'text':
+                    this.renderText();
+                    break;
+                case 'lasers':
+                    this.renderLasers();
+                    // Strobe logic (always on top of its layer)
+                    if(this.config.strobe.active) {
+                        const s = this.config.strobe;
+                        if(Date.now() - s.lastFlash > (1000/s.speed)) {
+                            if(this.bassLevel/255 > (1-s.reactivity)) {
+                                this.ctx.fillStyle = s.color;
+                                this.ctx.globalAlpha = 0.5;
+                                this.ctx.fillRect(0,0,this.width, this.height);
+                                this.ctx.globalAlpha = 1;
+                                s.lastFlash = Date.now();
+                            }
+                        }
+                    }
+                    break;
+                case 'glitch':
+                    this.applyGlitch();
+                    break;
+            }
+        });
+
+        requestAnimationFrame(() => this.animate());
+    }
+
+    setupTabs() {
+        const tabs = document.querySelectorAll('.nav-tab');
+        const contents = document.querySelectorAll('.tab-content');
+        
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                contents.forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.target).classList.add('active');
+            });
+        });
+    }
+
+    populateUI() {
+        const catTabs = document.getElementById('category-tabs');
+        const presetSelect = document.getElementById('preset-select');
+        let firstCat = true;
+
+        for (const [key, val] of Object.entries(this.themes)) {
+            const btn = document.createElement('div');
+            btn.className = `tab-btn ${firstCat ? 'active' : ''}`;
+            btn.innerText = val.name;
+            btn.onclick = (e) => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.updatePresetDropdown(key);
+            };
+            catTabs.appendChild(btn);
+            if(firstCat) {
+                this.updatePresetDropdown(key);
+                firstCat = false;
+            }
+        }
+    }
+
+    populateLayersUI() {
+        const list = document.getElementById('layer-list');
+        if(!list) return;
+        list.innerHTML = '';
+        
+        const labels = {
+            'background': 'Background',
+            'visuals': 'Audio Visuals',
+            'logo': 'Logo & Center EQ',
+            'text': 'Text Overlay',
+            'lasers': 'Lasers / Strobe',
+            'glitch': 'Post-FX Glitch'
+        };
+
+        this.config.layerOrder.forEach((id, index) => {
+            const item = document.createElement('div');
+            item.className = 'flex items-center justify-between bg-black/40 p-3 rounded border border-gray-800';
+            item.innerHTML = `
+                <span class="text-xs font-bold text-gray-300">${labels[id] || id}</span>
+                <div class="flex gap-2">
+                    <button class="layer-up text-blue-500 hover:text-blue-400 p-1" data-index="${index}">
+                        <i class="fas fa-chevron-up"></i>
+                    </button>
+                    <button class="layer-down text-blue-500 hover:text-blue-400 p-1" data-index="${index}">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+            `;
+            list.appendChild(item);
+        });
+
+        // Add listeners
+        list.querySelectorAll('.layer-up').forEach(btn => {
+            btn.onclick = () => {
+                const idx = parseInt(btn.dataset.index);
+                if(idx > 0) {
+                    const temp = this.config.layerOrder[idx];
+                    this.config.layerOrder[idx] = this.config.layerOrder[idx-1];
+                    this.config.layerOrder[idx-1] = temp;
+                    this.populateLayersUI();
+                }
+            };
+        });
+        list.querySelectorAll('.layer-down').forEach(btn => {
+            btn.onclick = () => {
+                const idx = parseInt(btn.dataset.index);
+                if(idx < this.config.layerOrder.length - 1) {
+                    const temp = this.config.layerOrder[idx];
+                    this.config.layerOrder[idx] = this.config.layerOrder[idx+1];
+                    this.config.layerOrder[idx+1] = temp;
+                    this.populateLayersUI();
+                }
+            };
+        });
+    }
+
+    addToPlaylist(type, element, name) {
+        this.playlist.push({ type, element, name });
+        if (this.playlist.length === 1) {
+            this.lastSlideTime = Date.now();
+        }
+        this.populatePlaylistUI();
+    }
+
+    populatePlaylistUI() {
+        const list = document.getElementById('playlist-list');
+        if (!list) return;
+        
+        if (this.playlist.length === 0) {
+            list.innerHTML = '<p class="text-[9px] text-gray-600 text-center py-2">Add images or videos to start playlist</p>';
+            return;
+        }
+
+        list.innerHTML = '';
+        this.playlist.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'flex items-center justify-between bg-black/40 p-2 rounded border border-gray-800 text-[10px]';
+            div.innerHTML = `
+                <div class="flex items-center gap-2 overflow-hidden">
+                    <span class="text-gray-500 w-4">${index + 1}</span>
+                    <i class="fas ${item.type === 'image' ? 'fa-image' : 'fa-video'} text-blue-400"></i>
+                    <span class="truncate text-gray-300" title="${item.name}">${item.name}</span>
+                </div>
+                <button class="remove-playlist-item text-red-500 hover:text-red-400 p-1" data-index="${index}">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            list.appendChild(div);
+        });
+
+        list.querySelectorAll('.remove-playlist-item').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const idx = parseInt(btn.dataset.index);
+                const removedItem = this.playlist[idx];
+                if (removedItem.type === 'video') {
+                    removedItem.element.pause();
+                    removedItem.element.src = "";
+                    removedItem.element.load();
+                }
+                
+                this.playlist.splice(idx, 1);
+                if (this.playlistIndex >= this.playlist.length) {
+                    this.playlistIndex = Math.max(0, this.playlist.length - 1);
+                }
+                if (this.playlist.length === 0) {
+                    this.playlistIndex = 0;
+                    this.lastSlideTime = 0;
+                }
+                this.populatePlaylistUI();
+            };
+        });
+    }
+
+    updatePresetDropdown(catKey) {
+        const select = document.getElementById('preset-select');
+        select.innerHTML = '';
+        const presets = this.themes[catKey].presets;
+        for(const [pkey, pval] of Object.entries(presets)) {
+            const opt = document.createElement('option');
+            opt.value = pkey;
+            opt.innerText = pval.name;
+            select.appendChild(opt);
+        }
+        this.config.theme = Object.keys(presets)[0];
+    }
+
+    attachListeners() {
+        // Helper to bind inputs to config
+        const bind = (id, objPath, key, type = 'value') => {
+            const el = document.getElementById(id);
+            if(!el) return;
+            el.addEventListener('input', (e) => {
+                let val = type === 'checkbox' ? e.target.checked : e.target.value;
+                if(type === 'value' && !isNaN(parseFloat(val)) && id !== 'text-input' && id !== 'strobe-color' && id !== 'laser-color') val = parseFloat(val);
+                
+                // Traverse config object
+                if (objPath) {
+                    this.config[objPath][key] = val;
+                } else {
+                    this.config[key] = val;
+                }
+            });
+        };
+
+        // Scene
+        bind('audio-gain', null, 'gain');
+        bind('bass-threshold', null, 'bassThreshold');
+        bind('theme-hue', null, 'themeHue');
+        document.getElementById('preset-select').addEventListener('change', (e) => this.config.theme = e.target.value);
+        document.getElementById('fs-btn').onclick = () => {
+             if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+             else if (document.exitFullscreen) document.exitFullscreen();
+        };
+
+        // Content
+        bind('bg-opacity', null, 'bgOpacity');
+        bind('bg-pulse', 'bgAnim', 'pulse', 'checkbox');
+        bind('bg-shake', 'bgAnim', 'shake', 'checkbox');
+        bind('bg-rotate', 'bgAnim', 'rotate', 'checkbox');
+        
+        document.getElementById('playlist-enabled').addEventListener('change', (e) => {
+            this.config.playlistEnabled = e.target.checked;
+            if(e.target.checked) {
+                this.lastSlideTime = Date.now();
+            } else {
+                // Pause all playlist videos when disabled, except maybe the main one
+                this.playlist.forEach(item => {
+                    if (item.type === 'video' && item.element !== this.bgVideo) {
+                        item.element.pause();
+                    }
+                });
+                if (this.bgVideo) this.bgVideo.play();
+            }
+        });
+
+        bind('playlist-loop', null, 'playlistLoop', 'checkbox');
+        bind('playlist-duration', null, 'slideDuration');
+
+        bind('logo-size', null, 'logoSize');
+        bind('anim-pulse-size', 'anim', 'pulseSize', 'checkbox');
+        bind('anim-pulse-glow', 'anim', 'pulseGlow', 'checkbox');
+        bind('anim-shake', 'anim', 'shake', 'checkbox');
+        bind('anim-sway', 'anim', 'sway', 'checkbox');
+
+        bind('logo-eq-enabled', 'logoEq', 'enabled', 'checkbox');
+        bind('logo-eq-type', 'logoEq', 'type');
+        bind('logo-eq-strength', 'logoEq', 'strength');
+        bind('logo-eq-padding', 'logoEq', 'padding');
+        bind('logo-eq-radius', 'logoEq', 'borderRadius');
+        bind('logo-eq-count', 'logoEq', 'barCount');
+        bind('logo-eq-width', 'logoEq', 'barWidth');
+        bind('logo-eq-closed', 'logoEq', 'closed', 'checkbox');
+        bind('logo-eq-glow', 'logoEq', 'glow');
+        
+        bind('text-input', null, 'text');
+        bind('font-family', null, 'font');
+        bind('text-pos', null, 'textPos');
+        bind('text-mode', 'anim', 'textMode');
+        bind('text-speed', 'anim', 'textSpeed');
+
+        // Glitch
+        bind('glitch-enabled', 'glitch', 'enabled', 'checkbox');
+        bind('glitch-rgb-amount', 'glitch', 'rgbAmount');
+        bind('glitch-rgb-chaos', 'glitch', 'rgbChaos', 'checkbox');
+        bind('glitch-rgb-mode', 'glitch', 'rgbMode');
+        bind('glitch-slice-amount', 'glitch', 'sliceAmount');
+        bind('glitch-slice-dir', 'glitch', 'sliceDir');
+        bind('glitch-slice-speed', 'glitch', 'sliceSpeed');
+        bind('glitch-noise-amount', 'glitch', 'noiseAmount');
+        bind('glitch-block-amount', 'glitch', 'blockAmount');
+        bind('glitch-invert', 'glitch', 'invert', 'checkbox');
+        bind('glitch-zoom', 'glitch', 'zoom', 'checkbox');
+
+        // Layers
+        this.populateLayersUI();
+        this.populatePlaylistUI();
+
+        // Lights
+        bind('strobe-active', 'strobe', 'active', 'checkbox');
+        bind('strobe-color', 'strobe', 'color');
+        bind('strobe-speed', 'strobe', 'speed');
+        bind('strobe-reactivity', 'strobe', 'reactivity');
+        
+        bind('laser-active', 'laser', 'active', 'checkbox');
+        bind('laser-preset', 'laser', 'preset');
+        bind('laser-color', 'laser', 'color');
+        bind('laser-count', 'laser', 'count');
+
+        // Files
+        document.getElementById('bg-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(file) {
+                if(this.bgVideo) {
+                    this.bgVideo.pause();
+                    this.bgVideo.src = "";
+                    this.bgVideo.load();
+                    this.bgVideo = null;
+                }
+                const img = new Image();
+                img.onload = () => {
+                    this.bgImage = img;
+                    this.addToPlaylist('image', img, file.name);
+                };
+                img.src = URL.createObjectURL(file);
+            }
+        });
+
+        document.getElementById('video-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(file) {
+                if(this.bgVideo) {
+                    this.bgVideo.pause();
+                    this.bgVideo.src = "";
+                    this.bgVideo.load();
+                }
+                this.bgImage = null;
+                const video = document.createElement('video');
+                video.src = URL.createObjectURL(file);
+                video.loop = true;
+                video.muted = true;
+                video.oncanplay = () => {
+                    video.play();
+                    this.bgVideo = video;
+                    this.addToPlaylist('video', video, file.name);
+                };
+            }
+        });
+        document.getElementById('logo-upload').addEventListener('change', (e) => {
+             if(e.target.files[0]) {
+                const img = new Image();
+                img.onload = () => this.logoImage = img;
+                img.src = URL.createObjectURL(e.target.files[0]);
+            }
+        });
+    }
+}
+
+window.onload = () => { window.app = new VisualizerApp(); };
+</script>
+</body>
+</html>
