@@ -148,9 +148,9 @@
                             <div class="flex items-center justify-between"><span class="text-sm font-medium text-slate-300">Полноэкранный режим</span><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" type="checkbox" id="fs-toggle"/><div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div></label></div>
                             <button id="reset-btn" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-red-500/50 text-red-500 hover:bg-red-500/10 transition-colors font-bold text-sm uppercase"><span class="material-symbols-outlined text-lg">restart_alt</span>Глобальный сброс</button>
                         </div>
-                        <div class="pt-2 border-t border-[#332839]"><h3 class="text-lg font-bold flex items-center gap-2 mb-4 mt-2"><span class="material-symbols-outlined text-primary">mic</span>Аудиовход</h3><div class="space-y-6">
+                        <div class="pt-2 border-t border-[#332839]"><div class="flex items-center justify-between mb-4 mt-2"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">mic</span>Аудиовход</h3><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" type="checkbox" id="mic-toggle"/><div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner"></div></label></div><div class="space-y-6">
                             <div class="space-y-2">
-                                <div class="flex justify-between items-end"><span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Уровень входа</span><span class="text-[10px] font-mono text-primary">-3.2 dB</span></div>
+                                <div class="flex justify-between items-end"><span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Уровень входа</span><span class="text-[10px] font-mono text-primary" id="mic-db-val">-3.2 dB</span></div>
                                 <div class="h-10 bg-slate-900 rounded-lg p-2 flex items-center gap-1 border border-slate-800 shadow-inner relative overflow-hidden">
                                     <div class="flex-1 h-full flex items-end gap-[2px]">
                                         <div class="w-1 bg-green-500 h-[40%] rounded-sm"></div><div class="w-1 bg-green-500 h-[60%] rounded-sm"></div><div class="w-1 bg-green-500 h-[85%] rounded-sm"></div><div class="w-1 bg-green-500 h-[50%] rounded-sm"></div><div class="w-1 bg-green-400 h-[90%] rounded-sm"></div><div class="w-1 bg-yellow-400 h-[80%] rounded-sm"></div><div class="w-1 bg-red-500 h-[40%] rounded-sm opacity-50"></div>
@@ -169,7 +169,7 @@
                     </div>
                     <div class="p-5 flex-1 overflow-y-auto space-y-6">
                         <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 shadow-[0_0_40px_-10px_rgba(164,19,236,0.3)] group mb-4">
-                            <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1534856966153-c86d43d53fe0?q=80&w=800&auto=format&fit=crop')] bg-cover bg-center opacity-60"></div>
+                            <canvas id="preview-scene" class="absolute inset-0 w-full h-full object-cover opacity-80"></canvas>
                             <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
                             <div class="absolute bottom-3 left-4">
                                 <div class="flex items-center gap-2">
@@ -228,7 +228,7 @@
                                 <div class="flex items-center gap-2 justify-end"><label class="text-[8px] text-slate-500 uppercase font-bold">Цикл (Loop)</label><input type="checkbox" id="playlist-loop" class="accent-primary" checked></div>
                             </div>
                             <div class="flex gap-2"><button id="playlist-prev" class="flex-1 py-1 bg-[#332839] rounded text-[10px] uppercase font-bold">Prev</button><button id="playlist-next" class="flex-1 py-1 bg-[#332839] rounded text-[10px] uppercase font-bold">Next</button><button id="playlist-clear" class="flex-1 py-1 bg-[#332839] rounded text-[10px] uppercase font-bold text-red-400">Clear</button></div>
-                            <div id="playlist-list" class="space-y-1 mt-2 max-h-32 overflow-y-auto"></div>
+                            <div id="playlist-list" class="space-y-2 mt-2 max-h-64 overflow-y-auto pr-1"></div>
                         </div>
                     </div>
                 </section>
@@ -304,8 +304,7 @@
                     <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">noise_control_off</span>Шум и искажения</h3></div>
                     <div class="p-5 flex-1 overflow-y-auto space-y-6">
                         <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-slate-800 flex items-center justify-center group shadow-[0_0_20px_rgba(164,19,236,0.15)] mb-4">
-                            <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1550684848-fac1c5b4e853?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80')] bg-cover bg-center opacity-40"></div>
-                            <div class="absolute top-1/4 left-0 w-full h-8 bg-black/20 backdrop-invert translate-x-2 skew-x-12"></div>
+                            <canvas id="preview-glitch" class="absolute inset-0 w-full h-full object-cover opacity-80"></canvas>
                             <div class="absolute bottom-2 right-2 bg-black/80 text-[8px] px-2 py-1 rounded text-primary font-mono border border-primary/20 uppercase font-bold">FX PREVIEW</div>
                         </div>
                         <div class="space-y-4 pt-2"><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><span class="material-symbols-outlined text-sm">grain</span> Цифровой шум</h4>
@@ -413,14 +412,19 @@ class VisualizerApp {
     constructor() {
         this.canvas = document.getElementById('visualizer');
         this.ctx = this.canvas.getContext('2d', { alpha: false, desynchronized: true });
+        this.previews = {
+            scene: document.getElementById('preview-scene'),
+            glitch: document.getElementById('preview-glitch')
+        };
         this.width = window.innerWidth; this.height = window.innerHeight;
         this.audioCtx = null; this.analyser = null; this.source = null; this.dataArray = null; this.bassLevel = 0;
         this.bgImage = null; this.bgVideo = null; this.logoImage = null;
         this.isRunning = false; this.time = 0; this.isMenuOpen = true;
         this.config = {
-            theme: 'cyber_punk', themeHue: 0, gain: 1.5, bassThreshold: 170,
-            brightness: 80, bloom: { threshold: 40, radius: 75, intensity: 90 },
-            bg: { opacity: 0.3, pulse: false, shake: false, spin: false },
+            micEnabled: true,
+            theme: 'club_tunnel', themeHue: 280, gain: 2.2, bassThreshold: 150,
+            brightness: 100, bloom: { threshold: 25, radius: 100, intensity: 100 },
+            bg: { opacity: 0.5, pulse: true, shake: true, spin: false },
             playlist: { enabled: false, duration: 10, loop: true, items: [], index: 0, lastSwitch: 0 },
             logo: { size: 40, fx: { pulseSize: false, pulseGlow: false, shake: false, sway: false }, eq: { enabled: false, type: 'circular', strength: 1.2, padding: 20, radius: 5, bars: 64, width: 2, closed: true, glow: 50 } },
             text: { content: '', font: 'Space Grotesk', pos: 'center', anim: 'static', speed: 50 },
@@ -467,9 +471,22 @@ class VisualizerApp {
         } catch (err) { console.error(err); }
     }
     analyzeAudio() {
-        if (!this.analyser) return; this.analyser.getByteFrequencyData(this.dataArray);
+        if (!this.analyser || !this.config.micEnabled) {
+            this.bassLevel = 0;
+            if (this.dataArray) this.dataArray.fill(0);
+            return;
+        }
+        this.analyser.getByteFrequencyData(this.dataArray);
         let bassSum = 0; for(let i=0; i<10; i++) bassSum += this.dataArray[i];
         this.bassLevel = Math.min((bassSum / 10) * this.config.gain, 255);
+
+        // Update DB label visually
+        const dbLabel = document.getElementById('mic-db-val');
+        if (dbLabel && this.time % 10 === 0) {
+            const avg = this.dataArray.reduce((a, b) => a + b, 0) / this.dataArray.length;
+            const db = (20 * Math.log10(avg / 255)).toFixed(1);
+            dbLabel.innerText = isFinite(db) ? db + ' dB' : '-∞ dB';
+        }
     }
     getThemes() {
         return {
@@ -504,14 +521,18 @@ class VisualizerApp {
             const mw = isVideo ? media.videoWidth : media.width;
             const mh = isVideo ? media.videoHeight : media.height;
             if (mw > 0 && mh > 0) {
-                const scale = Math.max(this.width / mw, this.height / mh) * scaleMult;
                 this.ctx.translate(this.width / 2, this.height / 2);
                 if (this.config.bg.spin) this.ctx.rotate(this.time * 0.01);
                 if (this.config.bg.shake && this.bassLevel > this.config.bassThreshold) {
                     this.ctx.translate(Math.random() * 20 - 10, Math.random() * 20 - 10);
                 }
-                this.ctx.scale(scale, scale);
-                this.ctx.drawImage(media, -mw / 2, -mh / 2, mw, mh);
+
+                const scale = Math.max(this.width / mw, this.height / mh) * scaleMult;
+                const dw = mw * scale;
+                const dh = mh * scale;
+
+                // DrawImage with destination coordinates is usually faster than context scaling for large media
+                this.ctx.drawImage(media, -dw / 2, -dh / 2, dw, dh);
             }
             this.ctx.restore();
         }
@@ -900,6 +921,19 @@ class VisualizerApp {
             this.ctx.save(); this.ctx.globalCompositeOperation = 'multiply';
             const b = this.config.brightness / 100; this.ctx.fillStyle = `rgb(${255*b},${255*b},${255*b})`; this.ctx.fillRect(0,0,this.width, this.height); this.ctx.restore();
         }
+
+        // Update Previews
+        if (this.isMenuOpen && this.time % 2 === 0) {
+            for (const key in this.previews) {
+                const pCanvas = this.previews[key];
+                if (pCanvas && pCanvas.offsetParent !== null) { // Only if visible
+                    const pCtx = pCanvas.getContext('2d');
+                    if (!pCanvas.width) { pCanvas.width = 320; pCanvas.height = 180; }
+                    pCtx.drawImage(this.canvas, 0, 0, pCanvas.width, pCanvas.height);
+                }
+            }
+        }
+
         requestAnimationFrame(() => this.animate());
     }
     setupTabs() {
@@ -992,18 +1026,33 @@ class VisualizerApp {
         if (!list) return;
         list.innerHTML = '';
         this.config.playlist.items.forEach((item, idx) => {
-            const div = document.createElement('div');
             const isActive = idx === this.config.playlist.index;
-            div.className = `text-[8px] p-1.5 rounded border flex justify-between items-center uppercase font-bold transition-all ${isActive ? 'bg-primary/20 border-primary text-white' : 'bg-[#161118] border-[#332839] text-slate-400 hover:border-slate-500'}`;
+            const div = document.createElement('div');
+            div.className = `flex items-center gap-3 p-2 rounded-lg border transition-all cursor-pointer group ${isActive ? 'bg-primary/10 border-primary/30' : 'bg-[#1c1022] border-transparent hover:border-[#4b3b54]'}`;
+
+            let thumbContent = '';
+            if (item.type === 'img') {
+                thumbContent = `<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${item.el.src}')"></div>`;
+            } else {
+                thumbContent = `<div class="absolute inset-0 flex items-center justify-center text-slate-600 bg-slate-900"><span class="material-symbols-outlined">movie</span></div>`;
+            }
+
             div.innerHTML = `
-                <div class="flex items-center gap-2 cursor-pointer flex-1">
-                    <span class="material-symbols-outlined text-[10px]">${item.type === 'video' ? 'movie' : 'image'}</span>
-                    <span class="truncate max-w-[100px]">${item.name}</span>
+                <div class="${isActive ? 'text-primary' : 'text-slate-500 group-hover:text-white'}">
+                    <span class="material-symbols-outlined text-lg">${isActive ? 'play_arrow' : 'drag_indicator'}</span>
                 </div>
-                <button class="delete-item text-red-500 hover:text-red-400 ml-2">
-                    <span class="material-symbols-outlined text-[12px]">delete</span>
+                <div class="size-10 bg-black rounded overflow-hidden relative shrink-0 border border-[#332839]">
+                    ${thumbContent}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-[11px] font-bold ${isActive ? 'text-primary' : 'text-slate-200'} truncate">${item.name}</div>
+                    <div class="text-[9px] text-slate-500 uppercase">${item.type === 'video' ? '00:30s • MP4' : 'IMAGE • PNG'}</div>
+                </div>
+                <button class="delete-item text-slate-500 hover:text-red-500 transition-colors">
+                    <span class="material-symbols-outlined text-lg">delete</span>
                 </button>
             `;
+
             div.onclick = (e) => {
                 if (!e.target.closest('.delete-item')) {
                     this.config.playlist.index = idx;
@@ -1048,6 +1097,13 @@ class VisualizerApp {
         bind('theme-hue', 'themeHue', 'hue-val', '°'); bind('global-brightness', 'brightness', 'bright-val', '%', true);
         bind('global-bloom', 'bloom.intensity', 'bloom-val', '%', true);
         bind('bg-opacity', 'bg.opacity', 'opacity-val', '%');
+
+        const micToggle = document.getElementById('mic-toggle');
+        if (micToggle) {
+            micToggle.checked = this.config.micEnabled;
+            micToggle.onchange = (e) => this.config.micEnabled = e.target.checked;
+        }
+
         document.getElementById('bg-pulse').onchange = (e) => this.config.bg.pulse = e.target.checked;
         document.getElementById('bg-shake').onchange = (e) => this.config.bg.shake = e.target.checked;
         document.getElementById('bg-spin').onchange = (e) => this.config.bg.spin = e.target.checked;
