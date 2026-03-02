@@ -441,7 +441,8 @@ class VisualizerApp {
             glitch: document.getElementById('preview-glitch')
         };
         this.width = window.innerWidth; this.height = window.innerHeight;
-        this.audioCtx = null; this.analyser = null; this.source = null; this.dataArray = null; this.bassLevel = 0;
+        this.audioCtx = null; this.analyser = null; this.source = null;
+        this.dataArray = new Uint8Array(1024).fill(0); this.bassLevel = 0;
         this.bgImage = null; this.bgVideo = null; this.logoImage = null;
         this.isRunning = false; this.time = 0; this.isMenuOpen = true;
         this.config = {
@@ -540,7 +541,7 @@ class VisualizerApp {
     analyzeAudio() {
         if (!this.analyser || !this.config.micEnabled) {
             this.bassLevel = 0;
-            if (this.dataArray) this.dataArray.fill(0);
+            this.dataArray.fill(0);
             return;
         }
         this.analyser.getByteFrequencyData(this.dataArray);
