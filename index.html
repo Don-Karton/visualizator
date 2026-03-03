@@ -33,29 +33,49 @@
         kbd {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         }
+
+        /* Анимации для слайд-шоу */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes slideOutLeft { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+
+        @keyframes zoomIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes zoomOut { from { transform: scale(1); opacity: 1; } to { transform: scale(1.2); opacity: 0; } }
+
+        .animate-fade-in { animation: fadeIn var(--anim-duration, 0.5s) ease-out forwards; }
+        .animate-fade-out { animation: fadeOut var(--anim-duration, 0.5s) ease-in forwards; }
+
+        .animate-slide-in { animation: slideInRight var(--anim-duration, 0.5s) ease-out forwards; }
+        .animate-slide-out { animation: slideOutLeft var(--anim-duration, 0.5s) ease-in forwards; }
+
+        .animate-zoom-in { animation: zoomIn var(--anim-duration, 0.5s) ease-out forwards; }
+        .animate-zoom-out { animation: zoomOut var(--anim-duration, 0.5s) ease-in forwards; }
     </style>
 </head>
 <body class="bg-black text-white">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback } = React;
+        const { useState, useEffect, useRef, useCallback, useMemo } = React;
         const {
           Settings, Play, Pause, SkipForward, Maximize, X,
           Upload, Trash2, Plus, Monitor, Image: ImageIcon,
-          QrCode, Zap, AlertCircle, Save
+          QrCode, Zap, AlertCircle, Save, Layers, Eye, EyeOff, GripVertical,
+          Clock, ChevronLeft, ChevronRight
         } = LucideReact;
 
         // --- Компонент для рендера QR-кода ---
-        const QRCodeCustom = ({ data, dotType, padding, bgRadius }) => {
+        const QRCodeCustom = ({ data, dotType, padding, bgRadius, size = 300 }) => {
           const qrRef = useRef(null);
 
           useEffect(() => {
             if (qrRef.current) {
               qrRef.current.innerHTML = '';
               const qrCode = new window.QRCodeStyling({
-                width: 300,
-                height: 300,
+                width: size,
+                height: size,
                 data: data,
                 margin: 0,
                 qrOptions: { typeNumber: 0, mode: "Byte", errorCorrectionLevel: "Q" },
@@ -66,10 +86,11 @@
               });
               qrCode.append(qrRef.current);
             }
-          }, [data, dotType, padding, bgRadius]);
+          }, [data, dotType, padding, bgRadius, size]);
 
           return (
             <div
+              className="inline-block"
               style={{
                 padding: `${padding}px`,
                 borderRadius: `${bgRadius}px`,
@@ -103,6 +124,14 @@
           const [imageDuration, setImageDuration] = useState(() => loadSavedData('imageDuration', 5));
           const [isPlaying, setIsPlaying] = useState(true);
 
+          // Анимации
+          const [animationSettings, setAnimationSettings] = useState(() => loadSavedData('animationSettings', {
+            type: 'fade', // fade, slide, zoom
+            inDuration: 0.8,
+            outDuration: 0.8
+          }));
+          const [animatingOut, setAnimatingOut] = useState(null);
+
           // Оверлеи (активные горячие клавиши)
           const [activeOverlays, setActiveOverlays] = useState({});
 
@@ -122,6 +151,16 @@
           }));
           const strobeRef = useRef(null);
 
+          // Эффекты (Canvas)
+          const [effects, setEffects] = useState(() => loadSavedData('effectsSettings', {
+            glitch: { enabled: false, intensity: 0.5, frequency: 0.2 },
+            channelFlicker: { enabled: false, intensity: 0.3, speed: 0.5 },
+            glowFlicker: { enabled: false, intensity: 0.6, color: '#ffffff', size: 50 },
+            starrySky: { enabled: false, count: 100, size: 2, speed: 0.1 },
+            flickeringDots: { enabled: false, count: 50, size: 5, frequency: 0.5, color: '#3b82f6' }
+          }));
+          const canvasRef = useRef(null);
+
           // QR Пресеты
           const [qrPresets, setQrPresets] = useState(() => loadSavedData('qrPresets', [
             {
@@ -138,12 +177,35 @@
             }
           ]));
 
+          // Слои
+          const [layers, setLayers] = useState(() => loadSavedData('layers', [
+            { id: 'media', name: 'Медиаконтент', visible: true },
+            { id: 'effects', name: 'Эффекты (Canvas)', visible: true },
+            { id: 'strobe', name: 'Стробоскоп', visible: true },
+            { id: 'qr', name: 'QR-коды', visible: true },
+            { id: 'logo', name: 'Логотип', visible: true }
+          ]));
+
+          const moveLayer = (fromIndex, toIndex) => {
+            const newLayers = [...layers];
+            const [moved] = newLayers.splice(fromIndex, 1);
+            newLayers.splice(toIndex, 0, moved);
+            setLayers(newLayers);
+          };
+
+          const toggleLayerVisibility = (id) => {
+            setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
+          };
+
           // Функция сохранения
           const saveAllData = () => {
             localStorage.setItem('qrPresets', JSON.stringify(qrPresets));
             localStorage.setItem('logoSettings', JSON.stringify(logoSettings));
             localStorage.setItem('imageDuration', JSON.stringify(imageDuration));
             localStorage.setItem('strobe', JSON.stringify(strobe));
+            localStorage.setItem('layers', JSON.stringify(layers));
+            localStorage.setItem('animationSettings', JSON.stringify(animationSettings));
+            localStorage.setItem('effectsSettings', JSON.stringify(effects));
 
             // Визуальная индикация на кнопке сохранения
             const btn = document.getElementById('global-save-btn');
@@ -161,10 +223,18 @@
 
           // --- Логика воспроизведения медиа ---
           const nextMedia = useCallback(() => {
-            if (mediaQueue.length > 0) {
-              setCurrentIndex((prev) => (prev + 1) % mediaQueue.length);
+            if (mediaQueue.length <= 1) {
+              if (mediaQueue.length === 1) setCurrentIndex(0);
+              return;
             }
-          }, [mediaQueue.length]);
+
+            setAnimatingOut(currentIndex);
+
+            setTimeout(() => {
+              setCurrentIndex((prev) => (prev + 1) % mediaQueue.length);
+              setAnimatingOut(null);
+            }, animationSettings.outDuration * 1000);
+          }, [mediaQueue.length, currentIndex, animationSettings.outDuration]);
 
           useEffect(() => {
             if (mediaQueue.length === 0 || !isPlaying) return;
@@ -205,6 +275,123 @@
             return () => clearTimeout(timeoutId);
           }, [strobe]);
 
+          // --- Canvas Effects Loop ---
+          useEffect(() => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let animationFrameId;
+
+            const resize = () => {
+              canvas.width = window.innerWidth;
+              canvas.height = window.innerHeight;
+            };
+            window.addEventListener('resize', resize);
+            resize();
+
+            let stars = [];
+            const initStars = () => {
+              stars = Array.from({ length: effects.starrySky.count }, () => ({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * effects.starrySky.size,
+                opacity: Math.random()
+              }));
+            };
+            initStars();
+
+            let dots = [];
+            const initDots = () => {
+              dots = Array.from({ length: effects.flickeringDots.count }, () => ({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                phase: Math.random() * Math.PI * 2
+              }));
+            };
+            initDots();
+
+            const render = (time) => {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+              // Starry Sky
+              if (effects.starrySky.enabled) {
+                if (stars.length !== effects.starrySky.count) initStars();
+                ctx.fillStyle = '#ffffff';
+                stars.forEach(star => {
+                  star.opacity += (Math.random() - 0.5) * effects.starrySky.speed;
+                  if (star.opacity < 0) star.opacity = 0;
+                  if (star.opacity > 1) star.opacity = 1;
+                  ctx.globalAlpha = star.opacity;
+                  ctx.beginPath();
+                  ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                  ctx.fill();
+                });
+                ctx.globalAlpha = 1.0;
+              }
+
+              // Flickering Dots
+              if (effects.flickeringDots.enabled) {
+                if (dots.length !== effects.flickeringDots.count) initDots();
+                ctx.fillStyle = effects.flickeringDots.color;
+                dots.forEach(dot => {
+                  dot.phase += effects.flickeringDots.frequency * 0.1;
+                  const opacity = (Math.sin(dot.phase) + 1) / 2;
+                  ctx.globalAlpha = opacity;
+                  ctx.beginPath();
+                  ctx.arc(dot.x, dot.y, effects.flickeringDots.size, 0, Math.PI * 2);
+                  ctx.fill();
+                });
+                ctx.globalAlpha = 1.0;
+              }
+
+              // Glow Flicker (Simplified: draw radial gradient in center)
+              if (effects.glowFlicker.enabled) {
+                const flicker = Math.random() > 0.5 ? effects.glowFlicker.intensity : 0;
+                if (flicker > 0) {
+                  const gradient = ctx.createRadialGradient(
+                    canvas.width/2, canvas.height/2, 0,
+                    canvas.width/2, canvas.height/2, canvas.width * (effects.glowFlicker.size / 100)
+                  );
+                  gradient.addColorStop(0, effects.glowFlicker.color);
+                  gradient.addColorStop(1, 'transparent');
+                  ctx.fillStyle = gradient;
+                  ctx.globalAlpha = flicker;
+                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                  ctx.globalAlpha = 1.0;
+                }
+              }
+
+              // Channel Flicker (RGB Split simulation)
+              if (effects.channelFlicker.enabled && Math.random() < effects.channelFlicker.speed) {
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+                ctx.fillRect(Math.random() * 10 - 5, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+                ctx.fillRect(Math.random() * 10 - 5, 0, canvas.width, canvas.height);
+              }
+
+              // Glitch (Static/Noise blocks)
+              if (effects.glitch.enabled && Math.random() < effects.glitch.frequency) {
+                for (let i = 0; i < 5; i++) {
+                  ctx.fillStyle = `rgba(255,255,255,${Math.random() * effects.glitch.intensity})`;
+                  ctx.fillRect(
+                    Math.random() * canvas.width,
+                    Math.random() * canvas.height,
+                    Math.random() * 100,
+                    Math.random() * 20
+                  );
+                }
+              }
+
+              animationFrameId = requestAnimationFrame(render);
+            };
+
+            animationFrameId = requestAnimationFrame(render);
+            return () => {
+              cancelAnimationFrame(animationFrameId);
+              window.removeEventListener('resize', resize);
+            };
+          }, [effects]);
+
           // --- Горячие клавиши ---
           useEffect(() => {
             const handleKeyDown = (e) => {
@@ -213,7 +400,16 @@
                   document.activeElement.tagName === 'TEXTAREA' ||
                   document.activeElement.tagName === 'SELECT') return;
 
-              const key = e.key.toLowerCase();
+              let key = e.key.toLowerCase();
+
+              // Маппинг русских клавиш для горячих клавиш
+              const RU_MAP = {
+                'й': 'q', 'ц': 'w', 'у': 'e', 'к': 'r', 'е': 't', 'н': 'y', 'г': 'u', 'ш': 'i', 'щ': 'o', 'з': 'p',
+                'ф': 'a', 'ы': 's', 'в': 'd', 'а': 'f', 'п': 'g', 'р': 'h', 'о': 'j', 'л': 'k', 'д': 'l',
+                'я': 'z', 'ч': 'x', 'с': 'c', 'м': 'v', 'и': 'b', 'т': 'n', 'ь': 'm'
+              };
+
+              if (RU_MAP[key]) key = RU_MAP[key];
 
               if (key === 'q') {
                 setSettingsOpen(prev => !prev);
@@ -221,9 +417,9 @@
                 setActiveOverlays(prev => ({ ...prev, 'z': !prev['z'] }));
               } else {
                 // Проверка QR пресетов
-                const preset = qrPresets.find(p => p.key === key);
+                const preset = qrPresets.find(p => p.key.toLowerCase() === key);
                 if (preset) {
-                  setActiveOverlays(prev => ({ ...prev, [key]: !prev[key] }));
+                  setActiveOverlays(prev => ({ ...prev, [preset.key]: !prev[preset.key] }));
                 }
               }
             };
@@ -292,90 +488,181 @@
           return (
             <div className="relative w-screen h-screen bg-black overflow-hidden font-sans select-none text-gray-300">
 
-              {/* 1. Главный экран (Холст) */}
-              <div
-                className="absolute inset-0 z-0 flex items-center justify-center cursor-pointer"
-                onContextMenu={handleContextMenu}
-                onClick={(e) => {
-                  if (e.target === e.currentTarget || e.target.tagName === 'VIDEO' || e.target.tagName === 'IMG') {
-                    setSettingsOpen(!settingsOpen);
+              {/* Главный контейнер для слоев */}
+              <div className="absolute inset-0 z-0 overflow-hidden bg-black">
+                {layers.map((layer, index) => {
+                  if (!layer.visible) return null;
+
+                  const layerZIndex = { zIndex: index * 10 };
+
+                  if (layer.id === 'media') {
+                    return (
+                      <div
+                        key="layer-media"
+                        className="absolute inset-0 flex items-center justify-center cursor-pointer overflow-hidden"
+                        style={layerZIndex}
+                        onContextMenu={handleContextMenu}
+                        onClick={(e) => {
+                          if (e.target === e.currentTarget || e.target.tagName === 'VIDEO' || e.target.tagName === 'IMG') {
+                            setSettingsOpen(!settingsOpen);
+                          }
+                        }}
+                      >
+                        {mediaQueue.length > 0 ? (
+                          mediaQueue.map((item, idx) => {
+                            const isActive = idx === currentIndex;
+                            const isExiting = idx === animatingOut;
+
+                            if (!isActive && !isExiting) return null;
+
+                            const isVideo = item.type.startsWith('video/');
+                            const animClass = isActive
+                              ? `animate-${animationSettings.type}-in`
+                              : `animate-${animationSettings.type}-out`;
+
+                            const duration = isActive
+                              ? animationSettings.inDuration
+                              : animationSettings.outDuration;
+
+                            return (
+                              <div
+                                key={item.id}
+                                className={`absolute inset-0 flex items-center justify-center ${animClass}`}
+                                style={{ '--anim-duration': `${duration}s` }}
+                              >
+                                {isVideo ? (
+                                  <video
+                                    src={item.url}
+                                    autoPlay
+                                    muted
+                                    className="w-full h-full object-contain pointer-events-none"
+                                    onEnded={nextMedia}
+                                  />
+                                ) : (
+                                  <img
+                                    src={item.url}
+                                    className="w-full h-full object-contain pointer-events-none"
+                                    alt="media"
+                                  />
+                                )}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-gray-600 flex flex-col items-center">
+                            <Monitor size={64} className="mb-4 opacity-50" />
+                            <p className="text-xl">Холст пуст</p>
+                            <p className="text-sm mt-2">Кликните или нажмите 'Q' для настройки</p>
+                          </div>
+                        )}
+                      </div>
+                    );
                   }
-                }}
-              >
-                {mediaQueue.length > 0 ? (
-                  mediaQueue[currentIndex]?.type.startsWith('video/') ? (
-                    <video
-                      key={mediaQueue[currentIndex].id}
-                      src={mediaQueue[currentIndex].url}
-                      autoPlay
-                      muted
-                      className="w-full h-full object-contain pointer-events-none"
-                      onEnded={nextMedia}
-                    />
-                  ) : (
-                    <img
-                      key={mediaQueue[currentIndex].id}
-                      src={mediaQueue[currentIndex].url}
-                      className="w-full h-full object-contain pointer-events-none transition-opacity duration-500"
-                      alt="media"
-                    />
-                  )
-                ) : (
-                  <div className="text-gray-600 flex flex-col items-center">
-                    <Monitor size={64} className="mb-4 opacity-50" />
-                    <p className="text-xl">Холст пуст</p>
-                    <p className="text-sm mt-2">Кликните или нажмите 'Q' для настройки</p>
-                  </div>
-                )}
-              </div>
 
-              {/* 2. Стробоскоп (Эффект поверх контента) */}
-              <div
-                ref={strobeRef}
-                className="absolute inset-0 z-10 bg-white pointer-events-none mix-blend-color-dodge transition-opacity duration-75"
-                style={{ opacity: 0 }}
-              />
-
-              {/* 3. Размытие фона при активных оверлеях */}
-              <div
-                className={`absolute inset-0 z-20 bg-black/40 backdrop-blur-md pointer-events-none transition-opacity duration-500 ${isAnyOverlayActive ? 'opacity-100' : 'opacity-0'}`}
-              />
-
-              {/* 4. Оверлеи (Логотип, QR-коды) */}
-              <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center">
-                {/* Логотип */}
-                {activeOverlays['z'] && logoSettings.url && (
-                  <img
-                    src={logoSettings.url}
-                    className="absolute transition-all duration-300"
-                    style={{
-                      width: `${logoSettings.size}%`,
-                      opacity: logoSettings.opacity / 100,
-                      filter: 'drop-shadow(0 20px 30px rgba(0,0,0,0.5))'
-                    }}
-                    alt="Logo Overlay"
-                  />
-                )}
-
-                {/* QR Коды */}
-                {qrPresets.map(preset => (
-                  activeOverlays[preset.key] && (
-                    <div key={preset.id} className="absolute transition-all duration-500 animate-in zoom-in-95 fade-in">
-                      <QRCodeCustom
-                        data={getQrData(preset)}
-                        dotType={preset.dotType}
-                        padding={preset.padding}
-                        bgRadius={preset.bgRadius}
+                  if (layer.id === 'strobe') {
+                    return (
+                      <div
+                        key="layer-strobe"
+                        ref={strobeRef}
+                        className="absolute inset-0 bg-white pointer-events-none mix-blend-color-dodge transition-opacity duration-75"
+                        style={{ ...layerZIndex, opacity: 0 }}
                       />
-                      <p className="text-center text-white mt-6 font-medium text-xl tracking-wider uppercase drop-shadow-md">
-                        {preset.name}
-                      </p>
-                    </div>
-                  )
-                ))}
+                    );
+                  }
+
+                  if (layer.id === 'effects') {
+                    return (
+                      <canvas
+                        key="layer-effects"
+                        ref={canvasRef}
+                        className="absolute inset-0 pointer-events-none"
+                        style={layerZIndex}
+                      />
+                    );
+                  }
+
+                  if (layer.id === 'qr' || layer.id === 'logo') {
+                    const isAnyOverlayActiveLocal = (layer.id === 'qr' && qrPresets.some(p => activeOverlays[p.key])) ||
+                                                    (layer.id === 'logo' && activeOverlays['z']);
+
+                    return (
+                      <React.Fragment key={`layer-${layer.id}`}>
+                        {/* Размытие фона при активных оверлеях */}
+                        <div
+                          className={`absolute inset-0 bg-black/40 backdrop-blur-md pointer-events-none transition-opacity duration-500`}
+                          style={{ ...layerZIndex, opacity: isAnyOverlayActiveLocal ? 1 : 0 }}
+                        />
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ zIndex: layerZIndex.zIndex + 1 }}>
+                          {layer.id === 'logo' && activeOverlays['z'] && logoSettings.url && (
+                            <img
+                              src={logoSettings.url}
+                              className="absolute transition-all duration-300"
+                              style={{
+                                width: `${logoSettings.size}%`,
+                                opacity: logoSettings.opacity / 100,
+                                filter: 'drop-shadow(0 20px 30px rgba(0,0,0,0.5))'
+                              }}
+                              alt="Logo Overlay"
+                            />
+                          )}
+
+                          {layer.id === 'qr' && qrPresets.map(preset => (
+                            activeOverlays[preset.key] && (
+                              <div key={preset.id} className="absolute transition-all duration-500 animate-in zoom-in-95 fade-in">
+                                <QRCodeCustom
+                                  data={getQrData(preset)}
+                                  dotType={preset.dotType}
+                                  padding={preset.padding}
+                                  bgRadius={preset.bgRadius}
+                                />
+                                <p className="text-center text-white mt-6 font-medium text-xl tracking-wider uppercase drop-shadow-md">
+                                  {preset.name}
+                                </p>
+                              </div>
+                            )
+                          ))}
+                        </div>
+                      </React.Fragment>
+                    );
+                  }
+
+                  return null;
+                })}
               </div>
 
-              {/* 5. Панель настроек */}
+              {/* 5. Таймлайн в нижней части (Визуальная лента) */}
+              <div
+                className={`absolute bottom-0 left-0 right-0 h-32 bg-black/80 backdrop-blur-xl border-t border-white/10 z-[60] transition-transform duration-500 transform ${activeTab === 'timeline' && settingsOpen ? 'translate-y-0' : 'translate-y-full'}`}
+              >
+                <div className="h-full flex items-center px-6 gap-4 overflow-x-auto custom-scrollbar">
+                  {mediaQueue.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      onClick={() => setCurrentIndex(idx)}
+                      className={`relative flex-shrink-0 h-20 w-36 rounded-lg border-2 cursor-pointer transition-all ${idx === currentIndex ? 'border-blue-500 scale-105 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'border-white/10 hover:border-white/30'}`}
+                    >
+                      {item.type.startsWith('video/') ? (
+                        <video src={item.url} className="w-full h-full object-cover rounded-md opacity-60" />
+                      ) : (
+                        <img src={item.url} className="w-full h-full object-cover rounded-md" alt="" />
+                      )}
+                      <div className="absolute bottom-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white">
+                        {idx + 1}
+                      </div>
+                      {idx === currentIndex && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                          <div className="w-3 h-3 bg-blue-500 rotate-45" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {mediaQueue.length === 0 && (
+                    <div className="text-gray-600 text-sm italic w-full text-center">Лента времени пуста</div>
+                  )}
+                </div>
+              </div>
+
+              {/* 6. Панель настроек */}
               <div
                 className={`absolute top-0 right-0 h-full w-[450px] bg-zinc-900/95 backdrop-blur-xl border-l border-white/10 z-50 transition-transform duration-300 shadow-2xl flex flex-col ${settingsOpen ? 'translate-x-0' : 'translate-x-full'}`}
               >
@@ -405,9 +692,11 @@
                 <div className="flex px-6 pt-4 gap-4 border-b border-white/5 overflow-x-auto custom-scrollbar">
                   {[
                     { id: 'media', icon: ImageIcon, label: 'Медиа' },
+                    { id: 'timeline', icon: Clock, label: 'Таймлайн' },
                     { id: 'qr', icon: QrCode, label: 'QR-коды' },
                     { id: 'logo', icon: ImageIcon, label: 'Лого (Z)' },
-                    { id: 'strobe', icon: Zap, label: 'Эффекты' }
+                    { id: 'strobe', icon: Zap, label: 'Эффекты' },
+                    { id: 'layers', icon: Layers, label: 'Слои' }
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -422,6 +711,106 @@
                 {/* Содержимое вкладок */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 text-gray-300 custom-scrollbar">
 
+                  {/* Вкладка: Таймлайн */}
+                  {activeTab === 'timeline' && (
+                    <div className="space-y-6 animate-in fade-in h-full flex flex-col">
+                      <div className="flex justify-between items-center">
+                        <p className="text-sm text-gray-400">Последовательность медиафайлов</p>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => setIsPlaying(!isPlaying)}
+                            className={`p-2 rounded-lg ${isPlaying ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-gray-400'}`}
+                          >
+                            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                        {mediaQueue.map((item, idx) => (
+                          <div
+                            key={item.id}
+                            onClick={() => setCurrentIndex(idx)}
+                            className={`flex items-center gap-3 p-2 rounded-xl border cursor-pointer transition-all ${idx === currentIndex ? 'bg-blue-600/20 border-blue-500' : 'bg-black/40 border-white/5 hover:border-white/20'}`}
+                          >
+                            <div className="w-8 text-xs font-mono text-gray-500 text-center">{idx + 1}</div>
+                            <div className="w-16 h-10 bg-zinc-800 rounded overflow-hidden flex-shrink-0">
+                              {item.type.startsWith('video/') ? (
+                                <video src={item.url} className="w-full h-full object-cover" />
+                              ) : (
+                                <img src={item.url} className="w-full h-full object-cover" alt="" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate text-white">{item.name}</p>
+                              <p className="text-[10px] text-gray-500 uppercase tracking-wider">{item.type.split('/')[0]}</p>
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); if (idx > 0) {
+                                  const newQueue = [...mediaQueue];
+                                  [newQueue[idx], newQueue[idx-1]] = [newQueue[idx-1], newQueue[idx]];
+                                  setMediaQueue(newQueue);
+                                  if (currentIndex === idx) setCurrentIndex(idx-1);
+                                  else if (currentIndex === idx-1) setCurrentIndex(idx);
+                                }}}
+                                className="p-1.5 hover:bg-white/10 rounded text-gray-400"
+                              >
+                                <ChevronLeft size={16} className="rotate-90" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); if (idx < mediaQueue.length - 1) {
+                                  const newQueue = [...mediaQueue];
+                                  [newQueue[idx], newQueue[idx+1]] = [newQueue[idx+1], newQueue[idx]];
+                                  setMediaQueue(newQueue);
+                                  if (currentIndex === idx) setCurrentIndex(idx+1);
+                                  else if (currentIndex === idx+1) setCurrentIndex(idx);
+                                }}}
+                                className="p-1.5 hover:bg-white/10 rounded text-gray-400"
+                              >
+                                <ChevronRight size={16} className="rotate-90" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); removeMedia(item.id); }}
+                                className="p-1.5 hover:bg-red-400/20 rounded text-red-400"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {mediaQueue.length === 0 && (
+                          <div className="h-40 border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center text-gray-600">
+                            <ImageIcon size={32} className="mb-2 opacity-20" />
+                            <p className="text-sm text-center px-8">Очередь пуста. Добавьте файлы во вкладке "Медиа"</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-4 border-t border-white/5">
+                        <div className="bg-blue-600/10 border border-blue-500/20 p-4 rounded-2xl">
+                          <div className="flex items-center gap-3 mb-3 text-blue-400">
+                            <Clock size={18} />
+                            <span className="text-sm font-bold uppercase tracking-widest">Информация</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-[10px] text-gray-500 uppercase mb-1">Всего файлов</p>
+                              <p className="text-lg font-bold text-white">{mediaQueue.length}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-gray-500 uppercase mb-1">Общее время (приблизительно)</p>
+                              <p className="text-lg font-bold text-white">
+                                {mediaQueue.reduce((acc, item) => acc + (item.type.startsWith('image/') ? imageDuration : 0), 0)} сек + видео
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Вкладка: Медиа */}
                   {activeTab === 'media' && (
                     <div className="space-y-6 animate-in fade-in">
@@ -433,6 +822,42 @@
                           onChange={(e) => setImageDuration(Number(e.target.value))}
                           className="w-full accent-blue-500 cursor-pointer"
                         />
+                      </div>
+
+                      <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-4">
+                        <p className="text-sm font-medium text-white">Анимации переходов</p>
+
+                        <div>
+                          <label className="text-xs text-gray-500 mb-1 block">Тип анимации</label>
+                          <select
+                            value={animationSettings.type}
+                            onChange={(e) => setAnimationSettings(prev => ({ ...prev, type: e.target.value }))}
+                            className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="fade">Плавное затухание</option>
+                            <option value="slide">Сдвиг (Slide)</option>
+                            <option value="zoom">Масштабирование (Zoom)</option>
+                          </select>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs text-gray-500 mb-1 block">Появление: {animationSettings.inDuration}с</label>
+                            <input
+                              type="range" min="0.1" max="3" step="0.1" value={animationSettings.inDuration}
+                              onChange={(e) => setAnimationSettings(prev => ({ ...prev, inDuration: Number(e.target.value) }))}
+                              className="w-full accent-blue-500 cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500 mb-1 block">Исчезновение: {animationSettings.outDuration}с</label>
+                            <input
+                              type="range" min="0.1" max="3" step="0.1" value={animationSettings.outDuration}
+                              onChange={(e) => setAnimationSettings(prev => ({ ...prev, outDuration: Number(e.target.value) }))}
+                              className="w-full accent-blue-500 cursor-pointer"
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       <div>
@@ -608,6 +1033,16 @@
                               </div>
                             </div>
                           </div>
+
+                          <div className="flex justify-center bg-zinc-800 p-4 rounded-lg">
+                            <QRCodeCustom
+                              data={getQrData(preset)}
+                              dotType={preset.dotType}
+                              padding={preset.padding}
+                              bgRadius={preset.bgRadius}
+                              size={150}
+                            />
+                          </div>
                         </div>
                       ))}
 
@@ -689,9 +1124,66 @@
                     </div>
                   )}
 
-                  {/* Вкладка: Стробоскоп */}
-                  {activeTab === 'strobe' && (
+                  {/* Вкладка: Слои */}
+                  {activeTab === 'layers' && (
                     <div className="space-y-6 animate-in fade-in">
+                      <p className="text-sm text-gray-400">
+                        Управление порядком и видимостью элементов на экране.
+                      </p>
+                      <div className="space-y-2">
+                        {layers.map((layer, index) => (
+                          <div
+                            key={layer.id}
+                            className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl group"
+                          >
+                            <div className="flex flex-col gap-1">
+                              <button
+                                onClick={() => index > 0 && moveLayer(index, index - 1)}
+                                className={`p-1 hover:bg-white/10 rounded text-gray-500 hover:text-white ${index === 0 ? 'opacity-20 cursor-default' : ''}`}
+                              >
+                                <Plus size={14} className="rotate-45" style={{ transform: 'rotate(180deg)' }} />
+                              </button>
+                            </div>
+                            <GripVertical className="text-gray-600 group-hover:text-gray-400 cursor-grab" size={20} />
+                            <span className="flex-1 font-medium text-sm">{layer.name}</span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => index > 0 && moveLayer(index, index - 1)}
+                                className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-blue-400"
+                                title="Выше"
+                              >
+                                <SkipForward size={16} className="-rotate-90" />
+                              </button>
+                              <button
+                                onClick={() => index < layers.length - 1 && moveLayer(index, index + 1)}
+                                className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-blue-400"
+                                title="Ниже"
+                              >
+                                <SkipForward size={16} className="rotate-90" />
+                              </button>
+                              <button
+                                onClick={() => toggleLayerVisibility(layer.id)}
+                                className={`p-2 rounded-lg transition ${layer.visible ? 'text-blue-400 hover:bg-blue-400/10' : 'text-gray-600 hover:bg-white/10'}`}
+                                title={layer.visible ? 'Скрыть' : 'Показать'}
+                              >
+                                {layer.visible ? <Eye size={18} /> : <EyeOff size={18} />}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={saveAllData}
+                        className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition border border-white/5"
+                      >
+                        <Save size={18} /> Сохранить порядок
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Вкладка: Эффекты */}
+                  {activeTab === 'strobe' && (
+                    <div className="space-y-8 animate-in fade-in pb-10">
                       <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 p-5 rounded-xl border border-blue-500/20">
                         <div className="flex items-center justify-between mb-2">
                           <h3 className="text-white font-bold flex items-center gap-2">
@@ -758,6 +1250,129 @@
                             <span>Рвано</span>
                           </div>
                         </div>
+                      </div>
+
+                      <div className="space-y-6 border-t border-white/10 pt-6">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                          <Monitor size={20} className="text-blue-400" /> Canvas Эффекты
+                        </h3>
+
+                        {/* Glitch */}
+                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Глитч эффект</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" checked={effects.glitch.enabled} onChange={(e) => setEffects(prev => ({ ...prev, glitch: { ...prev.glitch, enabled: e.target.checked } }))} />
+                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                          </div>
+                          <div className={effects.glitch.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Интенсивность</label>
+                                <input type="range" min="0" max="1" step="0.1" value={effects.glitch.intensity} onChange={(e) => setEffects(prev => ({ ...prev, glitch: { ...prev.glitch, intensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Частота</label>
+                                <input type="range" min="0" max="1" step="0.1" value={effects.glitch.frequency} onChange={(e) => setEffects(prev => ({ ...prev, glitch: { ...prev.glitch, frequency: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Channel Flicker */}
+                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Мерцание по каналам</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" checked={effects.channelFlicker.enabled} onChange={(e) => setEffects(prev => ({ ...prev, channelFlicker: { ...prev.channelFlicker, enabled: e.target.checked } }))} />
+                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                          </div>
+                          <div className={effects.channelFlicker.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
+                            <div>
+                              <label className="text-xs text-gray-500 block mb-1">Скорость / Вероятность</label>
+                              <input type="range" min="0" max="1" step="0.1" value={effects.channelFlicker.speed} onChange={(e) => setEffects(prev => ({ ...prev, channelFlicker: { ...prev.channelFlicker, speed: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Glow Flicker */}
+                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Мерцание свечения</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" checked={effects.glowFlicker.enabled} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, enabled: e.target.checked } }))} />
+                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                          </div>
+                          <div className={effects.glowFlicker.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Размер</label>
+                                <input type="range" min="10" max="200" value={effects.glowFlicker.size} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, size: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Цвет</label>
+                                <input type="color" value={effects.glowFlicker.color} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, color: e.target.value } }))} className="w-full h-8 bg-transparent rounded cursor-pointer" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Starry Sky */}
+                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Звездное небо</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" checked={effects.starrySky.enabled} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, enabled: e.target.checked } }))} />
+                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                          </div>
+                          <div className={effects.starrySky.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Количество звёзд</label>
+                                <input type="range" min="10" max="500" step="10" value={effects.starrySky.count} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, count: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Размер / Скорость</label>
+                                <input type="range" min="0.01" max="0.5" step="0.01" value={effects.starrySky.speed} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, speed: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Flickering Dots */}
+                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Мерцающие точки</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" checked={effects.flickeringDots.enabled} onChange={(e) => setEffects(prev => ({ ...prev, flickeringDots: { ...prev.flickeringDots, enabled: e.target.checked } }))} />
+                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                          </div>
+                          <div className={effects.flickeringDots.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Размер</label>
+                                <input type="range" min="1" max="20" value={effects.flickeringDots.size} onChange={(e) => setEffects(prev => ({ ...prev, flickeringDots: { ...prev.flickeringDots, size: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Частота</label>
+                                <input type="range" min="0.1" max="2" step="0.1" value={effects.flickeringDots.frequency} onChange={(e) => setEffects(prev => ({ ...prev, flickeringDots: { ...prev.flickeringDots, frequency: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                            </div>
+                            <input type="color" value={effects.flickeringDots.color} onChange={(e) => setEffects(prev => ({ ...prev, flickeringDots: { ...prev.flickeringDots, color: e.target.value } }))} className="w-full h-8 bg-transparent rounded cursor-pointer" />
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={saveAllData}
+                          className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition shadow-lg shadow-blue-500/20"
+                        >
+                          <Save size={20} /> Сохранить все эффекты
+                        </button>
                       </div>
                     </div>
                   )}
