@@ -44,6 +44,27 @@
         @keyframes zoomIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         @keyframes zoomOut { from { transform: scale(1); opacity: 1; } to { transform: scale(1.2); opacity: 0; } }
 
+        /* Постоянные анимации показа */
+        @keyframes kenBurns {
+          0% { transform: scale(1) translate(0, 0); }
+          50% { transform: scale(1.1) translate(-1%, -1%); }
+          100% { transform: scale(1) translate(0, 0); }
+        }
+        @keyframes smoothRotate {
+          0% { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(2deg) scale(1.05); }
+          100% { transform: rotate(0deg) scale(1); }
+        }
+        @keyframes floating {
+          0% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-10px) scale(1.02); }
+          100% { transform: translateY(0) scale(1); }
+        }
+
+        .animate-ken-burns { animation: kenBurns 20s ease-in-out infinite; }
+        .animate-smooth-rotate { animation: smoothRotate 15s ease-in-out infinite; }
+        .animate-floating { animation: floating 10s ease-in-out infinite; }
+
         .animate-fade-in { animation: fadeIn var(--anim-duration, 0.5s) ease-out forwards; }
         .animate-fade-out { animation: fadeOut var(--anim-duration, 0.5s) ease-in forwards; }
 
@@ -63,8 +84,41 @@
           Settings, Play, Pause, SkipForward, Maximize, X,
           Upload, Trash2, Plus, Monitor, Image: ImageIcon,
           QrCode, Zap, AlertCircle, Save, Layers, Eye, EyeOff, GripVertical,
-          Clock, ChevronLeft, ChevronRight
+          Clock, ChevronLeft, ChevronRight, Download, List, Copy
         } = LucideReact;
+
+        // --- IndexedDB для хранения медиафайлов ---
+        const dbPromise = new Promise((resolve, reject) => {
+          const request = indexedDB.open("VisualizerDB", 1);
+          request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains("playlists")) {
+              db.createObjectStore("playlists", { keyPath: "id" });
+            }
+          };
+          request.onsuccess = (e) => resolve(e.target.result);
+          request.onerror = (e) => reject(e.target.error);
+        });
+
+        const savePlaylistToDB = async (playlist) => {
+          const db = await dbPromise;
+          const tx = db.transaction("playlists", "readwrite");
+          const store = tx.objectStore("playlists");
+          // Мы сохраняем только один активный плейлист для простоты, либо по имени
+          await store.put({ id: "current", media: playlist, timestamp: Date.now() });
+          return tx.complete;
+        };
+
+        const loadPlaylistFromDB = async () => {
+          const db = await dbPromise;
+          const tx = db.transaction("playlists", "readonly");
+          const store = tx.objectStore("playlists");
+          const result = await new Promise((resolve) => {
+            const req = store.get("current");
+            req.onsuccess = () => resolve(req.result);
+          });
+          return result ? result.media : null;
+        };
 
         // --- Компонент для рендера QR-кода ---
         const QRCodeCustom = ({ data, dotType, padding, bgRadius, size = 300 }) => {
@@ -128,7 +182,8 @@
           const [animationSettings, setAnimationSettings] = useState(() => loadSavedData('animationSettings', {
             type: 'fade', // fade, slide, zoom
             inDuration: 0.8,
-            outDuration: 0.8
+            outDuration: 0.8,
+            displayType: 'none' // none, ken-burns, smooth-rotate, floating
           }));
           const [animatingOut, setAnimatingOut] = useState(null);
 
@@ -153,10 +208,10 @@
 
           // Эффекты (Canvas)
           const [effects, setEffects] = useState(() => loadSavedData('effectsSettings', {
-            glitch: { enabled: false, intensity: 0.5, frequency: 0.2 },
+            glitch: { enabled: false, intensity: 0.5, frequency: 0.2, amount: 5 },
             channelFlicker: { enabled: false, intensity: 0.3, speed: 0.5 },
-            glowFlicker: { enabled: false, intensity: 0.6, color: '#ffffff', size: 50 },
-            starrySky: { enabled: false, count: 100, size: 2, speed: 0.1 },
+            glowFlicker: { enabled: false, intensity: 0.6, color: '#ffffff', size: 50, frequency: 0.5 },
+            starrySky: { enabled: false, count: 100, size: 2, speed: 0.1, color: '#ffffff' },
             flickeringDots: { enabled: false, count: 50, size: 5, frequency: 0.5, color: '#3b82f6' }
           }));
           const canvasRef = useRef(null);
@@ -173,7 +228,8 @@
               wifiPass: '',
               bgRadius: 24,
               padding: 24,
-              dotType: 'rounded'
+              dotType: 'rounded',
+              size: 300
             }
           ]));
 
@@ -242,7 +298,8 @@
             const currentMedia = mediaQueue[currentIndex];
             // Если текущий файл - изображение, запускаем таймер
             if (currentMedia && currentMedia.type.startsWith('image/')) {
-              const timer = setTimeout(nextMedia, imageDuration * 1000);
+              const duration = currentMedia.duration || imageDuration;
+              const timer = setTimeout(nextMedia, duration * 1000);
               return () => clearTimeout(timer);
             }
             // Для видео переход происходит по событию onEnded на самом элементе
@@ -316,7 +373,7 @@
               // Starry Sky
               if (effects.starrySky.enabled) {
                 if (stars.length !== effects.starrySky.count) initStars();
-                ctx.fillStyle = '#ffffff';
+                ctx.fillStyle = effects.starrySky.color || '#ffffff';
                 stars.forEach(star => {
                   star.opacity += (Math.random() - 0.5) * effects.starrySky.speed;
                   if (star.opacity < 0) star.opacity = 0;
@@ -344,20 +401,25 @@
                 ctx.globalAlpha = 1.0;
               }
 
-              // Glow Flicker (Simplified: draw radial gradient in center)
+              // Glow Flicker
               if (effects.glowFlicker.enabled) {
-                const flicker = Math.random() > 0.5 ? effects.glowFlicker.intensity : 0;
+                const isFlickering = Math.random() < (effects.glowFlicker.frequency || 0.5);
+                const flicker = isFlickering ? effects.glowFlicker.intensity : (effects.glowFlicker.intensity * 0.3);
+
                 if (flicker > 0) {
+                  ctx.save();
+                  ctx.globalCompositeOperation = 'screen';
                   const gradient = ctx.createRadialGradient(
                     canvas.width/2, canvas.height/2, 0,
-                    canvas.width/2, canvas.height/2, canvas.width * (effects.glowFlicker.size / 100)
+                    canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * (effects.glowFlicker.size / 100)
                   );
                   gradient.addColorStop(0, effects.glowFlicker.color);
+                  gradient.addColorStop(0.5, effects.glowFlicker.color + '44');
                   gradient.addColorStop(1, 'transparent');
                   ctx.fillStyle = gradient;
                   ctx.globalAlpha = flicker;
                   ctx.fillRect(0, 0, canvas.width, canvas.height);
-                  ctx.globalAlpha = 1.0;
+                  ctx.restore();
                 }
               }
 
@@ -371,12 +433,13 @@
 
               // Glitch (Static/Noise blocks)
               if (effects.glitch.enabled && Math.random() < effects.glitch.frequency) {
-                for (let i = 0; i < 5; i++) {
+                const amount = effects.glitch.amount || 5;
+                for (let i = 0; i < amount; i++) {
                   ctx.fillStyle = `rgba(255,255,255,${Math.random() * effects.glitch.intensity})`;
                   ctx.fillRect(
                     Math.random() * canvas.width,
                     Math.random() * canvas.height,
-                    Math.random() * 100,
+                    Math.random() * (canvas.width * 0.2) * effects.glitch.intensity,
                     Math.random() * 20
                   );
                 }
@@ -442,7 +505,8 @@
               file,
               url: URL.createObjectURL(file),
               type: file.type,
-              name: file.name
+              name: file.name,
+              duration: imageDuration
             }));
             setMediaQueue(prev => [...prev, ...newMedia]);
           };
@@ -503,7 +567,15 @@
                         style={layerZIndex}
                         onContextMenu={handleContextMenu}
                         onClick={(e) => {
-                          if (e.target === e.currentTarget || e.target.tagName === 'VIDEO' || e.target.tagName === 'IMG') {
+                          // Предотвращаем срабатывание при клике на UI элементы, если они вдруг окажутся внутри
+                          if (e.target.closest('button') || e.target.closest('input')) return;
+
+                          // Если клик по самому контейнеру или по медиа-элементам
+                          if (e.target === e.currentTarget ||
+                              e.target.tagName === 'VIDEO' ||
+                              e.target.tagName === 'IMG' ||
+                              e.target.classList.contains('animate-in') || // контейнеры анимаций
+                              e.target.parentElement?.id === 'layer-media') {
                             setSettingsOpen(!settingsOpen);
                           }
                         }}
@@ -520,6 +592,10 @@
                               ? `animate-${animationSettings.type}-in`
                               : `animate-${animationSettings.type}-out`;
 
+                            const displayAnimClass = (isActive && !isVideo && animationSettings.displayType !== 'none')
+                              ? `animate-${animationSettings.displayType}`
+                              : '';
+
                             const duration = isActive
                               ? animationSettings.inDuration
                               : animationSettings.outDuration;
@@ -530,6 +606,7 @@
                                 className={`absolute inset-0 flex items-center justify-center ${animClass}`}
                                 style={{ '--anim-duration': `${duration}s` }}
                               >
+                                <div className={`w-full h-full flex items-center justify-center ${displayAnimClass}`}>
                                 {isVideo ? (
                                   <video
                                     src={item.url}
@@ -545,6 +622,7 @@
                                     alt="media"
                                   />
                                 )}
+                                </div>
                               </div>
                             );
                           })
@@ -614,6 +692,7 @@
                                   dotType={preset.dotType}
                                   padding={preset.padding}
                                   bgRadius={preset.bgRadius}
+                                  size={preset.size || 300}
                                 />
                                 <p className="text-center text-white mt-6 font-medium text-xl tracking-wider uppercase drop-shadow-md">
                                   {preset.name}
@@ -632,14 +711,24 @@
 
               {/* 5. Таймлайн в нижней части (Визуальная лента) */}
               <div
-                className={`absolute bottom-0 left-0 right-0 h-32 bg-black/80 backdrop-blur-xl border-t border-white/10 z-[60] transition-transform duration-500 transform ${activeTab === 'timeline' && settingsOpen ? 'translate-y-0' : 'translate-y-full'}`}
+                className={`absolute bottom-0 left-0 right-0 h-40 bg-black/90 backdrop-blur-xl border-t border-white/10 z-[60] transition-transform duration-500 transform ${activeTab === 'timeline' && settingsOpen ? 'translate-y-0' : 'translate-y-full'}`}
               >
-                <div className="h-full flex items-center px-6 gap-4 overflow-x-auto custom-scrollbar">
+                {/* Временная шкала (секунды) */}
+                <div className="absolute top-0 left-0 right-0 h-6 border-b border-white/5 flex items-center px-6 overflow-hidden">
+                   {Array.from({ length: 20 }).map((_, i) => (
+                     <div key={i} className="flex-shrink-0 w-[100px] border-l border-white/10 h-full flex items-center pl-1 text-[9px] text-gray-600">
+                       {i * 10}с
+                     </div>
+                   ))}
+                </div>
+
+                <div className="h-full flex items-center px-6 gap-2 overflow-x-auto custom-scrollbar pt-6">
                   {mediaQueue.map((item, idx) => (
                     <div
                       key={item.id}
                       onClick={() => setCurrentIndex(idx)}
-                      className={`relative flex-shrink-0 h-20 w-36 rounded-lg border-2 cursor-pointer transition-all ${idx === currentIndex ? 'border-blue-500 scale-105 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'border-white/10 hover:border-white/30'}`}
+                      style={{ width: `${(item.duration || imageDuration) * 10}px`, minWidth: '60px' }}
+                      className={`relative flex-shrink-0 h-24 rounded-lg border-2 cursor-pointer transition-all ${idx === currentIndex ? 'border-blue-500 scale-[1.02] shadow-[0_0_20px_rgba(59,130,246,0.3)] z-10' : 'border-white/10 hover:border-white/30'}`}
                     >
                       {item.type.startsWith('video/') ? (
                         <video src={item.url} className="w-full h-full object-cover rounded-md opacity-60" />
@@ -647,7 +736,7 @@
                         <img src={item.url} className="w-full h-full object-cover rounded-md" alt="" />
                       )}
                       <div className="absolute bottom-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white">
-                        {idx + 1}
+                        {idx + 1} ({item.duration || imageDuration}с)
                       </div>
                       {idx === currentIndex && (
                         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -696,7 +785,8 @@
                     { id: 'qr', icon: QrCode, label: 'QR-коды' },
                     { id: 'logo', icon: ImageIcon, label: 'Лого (Z)' },
                     { id: 'strobe', icon: Zap, label: 'Эффекты' },
-                    { id: 'layers', icon: Layers, label: 'Слои' }
+                    { id: 'layers', icon: Layers, label: 'Слои' },
+                    { id: 'presets', icon: List, label: 'Пресеты' }
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -745,37 +835,52 @@
                               <p className="text-sm font-medium truncate text-white">{item.name}</p>
                               <p className="text-[10px] text-gray-500 uppercase tracking-wider">{item.type.split('/')[0]}</p>
                             </div>
-                            <div className="flex gap-1">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); if (idx > 0) {
-                                  const newQueue = [...mediaQueue];
-                                  [newQueue[idx], newQueue[idx-1]] = [newQueue[idx-1], newQueue[idx]];
-                                  setMediaQueue(newQueue);
-                                  if (currentIndex === idx) setCurrentIndex(idx-1);
-                                  else if (currentIndex === idx-1) setCurrentIndex(idx);
-                                }}}
-                                className="p-1.5 hover:bg-white/10 rounded text-gray-400"
-                              >
-                                <ChevronLeft size={16} className="rotate-90" />
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); if (idx < mediaQueue.length - 1) {
-                                  const newQueue = [...mediaQueue];
-                                  [newQueue[idx], newQueue[idx+1]] = [newQueue[idx+1], newQueue[idx]];
-                                  setMediaQueue(newQueue);
-                                  if (currentIndex === idx) setCurrentIndex(idx+1);
-                                  else if (currentIndex === idx+1) setCurrentIndex(idx);
-                                }}}
-                                className="p-1.5 hover:bg-white/10 rounded text-gray-400"
-                              >
-                                <ChevronRight size={16} className="rotate-90" />
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); removeMedia(item.id); }}
-                                className="p-1.5 hover:bg-red-400/20 rounded text-red-400"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                            <div className="flex flex-col gap-1 items-end">
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); if (idx > 0) {
+                                    const newQueue = [...mediaQueue];
+                                    [newQueue[idx], newQueue[idx-1]] = [newQueue[idx-1], newQueue[idx]];
+                                    setMediaQueue(newQueue);
+                                    if (currentIndex === idx) setCurrentIndex(idx-1);
+                                    else if (currentIndex === idx-1) setCurrentIndex(idx);
+                                  }}}
+                                  className="p-1.5 hover:bg-white/10 rounded text-gray-400"
+                                >
+                                  <ChevronLeft size={16} className="rotate-90" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); if (idx < mediaQueue.length - 1) {
+                                    const newQueue = [...mediaQueue];
+                                    [newQueue[idx], newQueue[idx+1]] = [newQueue[idx+1], newQueue[idx]];
+                                    setMediaQueue(newQueue);
+                                    if (currentIndex === idx) setCurrentIndex(idx+1);
+                                    else if (currentIndex === idx+1) setCurrentIndex(idx);
+                                  }}}
+                                  className="p-1.5 hover:bg-white/10 rounded text-gray-400"
+                                >
+                                  <ChevronRight size={16} className="rotate-90" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); removeMedia(item.id); }}
+                                  className="p-1.5 hover:bg-red-400/20 rounded text-red-400"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-gray-500 uppercase">Время:</span>
+                                <input
+                                  type="number" min="1" max="600"
+                                  value={item.duration || imageDuration}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    const val = Math.max(1, Number(e.target.value));
+                                    setMediaQueue(prev => prev.map(m => m.id === item.id ? { ...m, duration: val } : m));
+                                  }}
+                                  className="w-12 bg-black/50 border border-white/10 rounded px-1 py-0.5 text-[10px] text-white text-center focus:outline-none focus:border-blue-500"
+                                />
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -828,7 +933,7 @@
                         <p className="text-sm font-medium text-white">Анимации переходов</p>
 
                         <div>
-                          <label className="text-xs text-gray-500 mb-1 block">Тип анимации</label>
+                          <label className="text-xs text-gray-500 mb-1 block">Анимация перехода (Вход/Выход)</label>
                           <select
                             value={animationSettings.type}
                             onChange={(e) => setAnimationSettings(prev => ({ ...prev, type: e.target.value }))}
@@ -837,6 +942,20 @@
                             <option value="fade">Плавное затухание</option>
                             <option value="slide">Сдвиг (Slide)</option>
                             <option value="zoom">Масштабирование (Zoom)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-gray-500 mb-1 block">Анимация показа слайда</label>
+                          <select
+                            value={animationSettings.displayType || 'none'}
+                            onChange={(e) => setAnimationSettings(prev => ({ ...prev, displayType: e.target.value }))}
+                            className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="none">Без анимации</option>
+                            <option value="ken-burns">Плавное масштабирование (Ken Burns)</option>
+                            <option value="smooth-rotate">Плавное вращение</option>
+                            <option value="floating">Парение</option>
                           </select>
                         </div>
 
@@ -866,12 +985,58 @@
                           ref={fileInputRef} onChange={handleMediaUpload}
                           onClick={(e) => e.target.value = null}
                         />
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition"
-                        >
-                          <Upload size={18} /> Добавить медиафайлы
-                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition"
+                          >
+                            <Upload size={18} /> Добавить
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const mediaToSave = mediaQueue.map(item => ({
+                                  id: item.id,
+                                  type: item.type,
+                                  name: item.name,
+                                  duration: item.duration,
+                                  file: item.file // Blob
+                                }));
+                                await savePlaylistToDB(mediaToSave);
+                                alert('Плейлист сохранен!');
+                              } catch (e) {
+                                console.error(e);
+                                alert('Ошибка сохранения плейлиста');
+                              }
+                            }}
+                            className="py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition border border-white/10"
+                          >
+                            <Save size={18} /> Сохранить
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const savedMedia = await loadPlaylistFromDB();
+                                if (savedMedia) {
+                                  const restoredMedia = savedMedia.map(item => ({
+                                    ...item,
+                                    url: URL.createObjectURL(item.file)
+                                  }));
+                                  setMediaQueue(prev => [...prev, ...restoredMedia]);
+                                  alert('Плейлист загружен!');
+                                } else {
+                                  alert('Нет сохраненных плейлистов');
+                                }
+                              } catch (e) {
+                                console.error(e);
+                                alert('Ошибка загрузки плейлиста');
+                              }
+                            }}
+                            className="py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition border border-white/10 col-span-2"
+                          >
+                            <Download size={18} /> Загрузить последний плейлист
+                          </button>
+                        </div>
                       </div>
 
                       {mediaQueue.length > 0 && (
@@ -1031,6 +1196,14 @@
                                   className="w-full accent-blue-500"
                                 />
                               </div>
+                              <div className="col-span-2">
+                                <label className="text-xs text-gray-500 mb-1 block">Размер QR-кода: {preset.size || 300}px</label>
+                                <input
+                                  type="range" min="100" max="800" step="10" value={preset.size || 300}
+                                  onChange={(e) => updatePreset(preset.id, 'size', Number(e.target.value))}
+                                  className="w-full accent-blue-500"
+                                />
+                              </div>
                             </div>
                           </div>
 
@@ -1048,7 +1221,7 @@
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => setQrPresets(prev => [...prev, { id: Math.random().toString(), key: '', name: 'Новый код', type: 'url', url: '', wifiSsid: '', wifiPass: '', bgRadius: 16, padding: 16, dotType: 'square' }])}
+                  onClick={() => setQrPresets(prev => [...prev, { id: Math.random().toString(), key: '', name: 'Новый код', type: 'url', url: '', wifiSsid: '', wifiPass: '', bgRadius: 16, padding: 16, dotType: 'square', size: 300 }])}
                   className="flex-1 py-3 border border-dashed border-white/20 hover:border-blue-500 hover:text-blue-400 rounded-xl font-medium flex items-center justify-center gap-2 transition"
                 >
                   <Plus size={18} /> Добавить пресет
@@ -1267,7 +1440,7 @@
                             </label>
                           </div>
                           <div className={effects.glitch.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-4">
                               <div>
                                 <label className="text-xs text-gray-500 block mb-1">Интенсивность</label>
                                 <input type="range" min="0" max="1" step="0.1" value={effects.glitch.intensity} onChange={(e) => setEffects(prev => ({ ...prev, glitch: { ...prev.glitch, intensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
@@ -1275,6 +1448,10 @@
                               <div>
                                 <label className="text-xs text-gray-500 block mb-1">Частота</label>
                                 <input type="range" min="0" max="1" step="0.1" value={effects.glitch.frequency} onChange={(e) => setEffects(prev => ({ ...prev, glitch: { ...prev.glitch, frequency: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Количество</label>
+                                <input type="range" min="1" max="20" step="1" value={effects.glitch.amount || 5} onChange={(e) => setEffects(prev => ({ ...prev, glitch: { ...prev.glitch, amount: Number(e.target.value) } }))} className="w-full accent-blue-500" />
                               </div>
                             </div>
                           </div>
@@ -1309,6 +1486,14 @@
                           <div className={effects.glowFlicker.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
                             <div className="grid grid-cols-2 gap-4">
                               <div>
+                                <label className="text-xs text-gray-500 block mb-1">Интенсивность</label>
+                                <input type="range" min="0" max="1" step="0.1" value={effects.glowFlicker.intensity} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, intensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Частота</label>
+                                <input type="range" min="0.1" max="1" step="0.1" value={effects.glowFlicker.frequency || 0.5} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, frequency: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
                                 <label className="text-xs text-gray-500 block mb-1">Размер</label>
                                 <input type="range" min="10" max="200" value={effects.glowFlicker.size} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, size: Number(e.target.value) } }))} className="w-full accent-blue-500" />
                               </div>
@@ -1338,6 +1523,14 @@
                               <div>
                                 <label className="text-xs text-gray-500 block mb-1">Размер / Скорость</label>
                                 <input type="range" min="0.01" max="0.5" step="0.01" value={effects.starrySky.speed} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, speed: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Макс. размер</label>
+                                <input type="range" min="1" max="10" step="1" value={effects.starrySky.size} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, size: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Цвет</label>
+                                <input type="color" value={effects.starrySky.color || '#ffffff'} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, color: e.target.value } }))} className="w-full h-8 bg-transparent rounded cursor-pointer" />
                               </div>
                             </div>
                           </div>
@@ -1372,6 +1565,78 @@
                           className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition shadow-lg shadow-blue-500/20"
                         >
                           <Save size={20} /> Сохранить все эффекты
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Вкладка: Пресеты */}
+                  {activeTab === 'presets' && (
+                    <div className="space-y-6 animate-in fade-in">
+                      <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-4">
+                        <h3 className="text-white font-bold flex items-center gap-2">
+                          <List size={18} className="text-blue-400" /> Сохраненные пресеты
+                        </h3>
+                        <p className="text-xs text-gray-500">
+                          Сохраняйте текущие настройки (эффекты, QR, лого) для быстрого переключения.
+                        </p>
+
+                        <div className="space-y-2">
+                           {loadSavedData('appPresets', []).map((p, i) => (
+                             <div key={i} className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-lg">
+                               <span className="text-sm font-medium">{p.name}</span>
+                               <div className="flex gap-2">
+                                 <button
+                                   onClick={() => {
+                                     if (p.data.qrPresets) setQrPresets(p.data.qrPresets);
+                                     if (p.data.effects) setEffects(p.data.effects);
+                                     if (p.data.strobe) setStrobe(p.data.strobe);
+                                     if (p.data.logoSettings) setLogoSettings(p.data.logoSettings);
+                                     if (p.data.animationSettings) setAnimationSettings(p.data.animationSettings);
+                                     alert('Пресет загружен!');
+                                   }}
+                                   className="p-1.5 bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/40"
+                                 >
+                                   <Download size={14} />
+                                 </button>
+                                 <button
+                                   onClick={() => {
+                                     const all = loadSavedData('appPresets', []);
+                                     const filtered = all.filter((_, idx) => idx !== i);
+                                     localStorage.setItem('appPresets', JSON.stringify(filtered));
+                                     setActiveTab('presets'); // force re-render
+                                   }}
+                                   className="p-1.5 bg-red-600/20 text-red-400 rounded hover:bg-red-600/40"
+                                 >
+                                   <Trash2 size={14} />
+                                 </button>
+                               </div>
+                             </div>
+                           ))}
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            const name = prompt('Введите название пресета:');
+                            if (name) {
+                              const currentPresets = loadSavedData('appPresets', []);
+                              const newPreset = {
+                                name,
+                                data: {
+                                  qrPresets,
+                                  effects,
+                                  strobe,
+                                  logoSettings,
+                                  animationSettings
+                                }
+                              };
+                              localStorage.setItem('appPresets', JSON.stringify([...currentPresets, newPreset]));
+                              setActiveTab('presets');
+                            }
+                          }}
+                          className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm transition border border-white/5"
+                        >
+                          Сохранить текущий пресет
                         </button>
                       </div>
                     </div>
