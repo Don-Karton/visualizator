@@ -1,1299 +1,698 @@
-<!DOCTYPE html>
-<html class="dark" lang="ru">
-<head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Visualizer Pro v2</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect"/>
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#a413ec",
-                        "background-light": "#f7f6f8",
-                        "background-dark": "#1c1022",
-                        "surface-dark": "#2a1b32",
-                        "surface-highlight": "#3a2544",
-                    },
-                    fontFamily: {
-                        "display": ["Space Grotesk", "sans-serif"]
-                    },
-                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
-                },
-            },
-        }
-    </script>
-    <style>
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #1c1022; }
-        ::-webkit-scrollbar-thumb { background: #3a2544; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #a413ec; }
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { 
+  Settings, Play, Pause, SkipForward, Maximize, X, 
+  Upload, Trash2, Plus, Monitor, Image as ImageIcon, 
+  QrCode, Zap, AlertCircle
+} from 'lucide-react';
 
-        input[type=range] { -webkit-appearance: none; background: transparent; }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
-            background: #a413ec; cursor: pointer; margin-top: -6px;
-            box-shadow: 0 0 10px rgba(164, 19, 236, 0.5); border: 2px solid #fff;
-        }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%; height: 8px; cursor: pointer; background: #2a1b32; border-radius: 4px;
-            border: 1px solid rgba(164, 19, 236, 0.5);
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%;
-            background: #a413ec; cursor: pointer; margin-top: -6px;
-            box-shadow: 0 0 15px rgba(164, 19, 236, 0.8); border: 2px solid #fff;
-        }
+// --- Компонент для рендера QR-кода ---
+const QRCodeCustom = ({ data, dotType, padding, bgRadius }) => {
+  const qrRef = useRef(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
-        body { background-color: #000; overflow: hidden; margin: 0; font-family: 'Space Grotesk', sans-serif; }
-        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+  useEffect(() => {
+    // Динамическая загрузка библиотеки для красивых QR-кодов (скругленные точки)
+    if (!window.QRCodeStyling) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js';
+      script.onload = () => setIsLoaded(true);
+      document.body.appendChild(script);
+    } else {
+      setIsLoaded(true);
+    }
+  }, []);
 
-        #console-ui {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 50;
-            background: rgba(28, 16, 34, 0.75); backdrop-filter: blur(25px);
-            display: flex; flex-direction: column; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            opacity: 0; pointer-events: none; transform: scale(1.05);
-        }
-        #console-ui.active { opacity: 1; pointer-events: auto !important; transform: scale(1); }
+  useEffect(() => {
+    if (isLoaded && qrRef.current) {
+      qrRef.current.innerHTML = '';
+      const qrCode = new window.QRCodeStyling({
+        width: 300,
+        height: 300,
+        data: data,
+        margin: 0,
+        qrOptions: { typeNumber: 0, mode: "Byte", errorCorrectionLevel: "Q" },
+        dotsOptions: { type: dotType, color: "#000000" },
+        backgroundOptions: { color: "transparent" },
+        cornersSquareOptions: { type: dotType === 'rounded' || dotType === 'classy' ? 'extra-rounded' : 'square', color: "#000000" },
+        cornersDotOptions: { type: dotType === 'rounded' || dotType === 'classy' ? 'dot' : 'square', color: "#000000" }
+      });
+      qrCode.append(qrRef.current);
+    }
+  }, [isLoaded, data, dotType]);
 
-        .tab-panel { display: none; width: 100%; height: 100%; gap: 1rem; }
-        .tab-panel.active { display: flex; }
+  return (
+    <div 
+      style={{ 
+        padding: `${padding}px`, 
+        borderRadius: `${bgRadius}px`, 
+        backgroundColor: '#ffffff',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+      }}
+    >
+      <div ref={qrRef} />
+    </div>
+  );
+};
 
-        #start-overlay {
-            position: fixed; inset: 0; z-index: 100;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: white;
-        }
+export default function App() {
+  // --- Состояния приложения ---
+  const [settingsOpen, setSettingsOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('media');
+  
+  // Медиа
+  const [mediaQueue, setMediaQueue] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [imageDuration, setImageDuration] = useState(5); // в секундах
+  const [isPlaying, setIsPlaying] = useState(true);
+  
+  // Оверлеи (активные горячие клавиши)
+  const [activeOverlays, setActiveOverlays] = useState({});
+  
+  // Логотип (Z)
+  const [logoSettings, setLogoSettings] = useState({
+    url: null,
+    size: 30, // %
+    opacity: 100 // %
+  });
 
-        .knob-container {
-            position: relative; width: 60px; height: 60px; border-radius: 50%;
-            background: conic-gradient(from 180deg, #a413ec 0%, #a413ec 70%, #3a2544 70%, #3a2544 100%);
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3); transform: rotate(-135deg);
+  // Стробоскоп
+  const [strobe, setStrobe] = useState({
+    enabled: false,
+    intensity: 0.8,
+    speed: 100, // ms
+    randomness: 0.5 // 0 to 1
+  });
+  const strobeRef = useRef(null);
+
+  // QR Пресеты
+  const [qrPresets, setQrPresets] = useState([
+    { 
+      id: 'default-a', 
+      key: 'a', 
+      name: 'Меню заведения (A)', 
+      type: 'url', 
+      url: 'https://example.com/menu',
+      wifiSsid: '',
+      wifiPass: '',
+      bgRadius: 24, 
+      padding: 24, 
+      dotType: 'rounded' 
+    }
+  ]);
+
+  const fileInputRef = useRef(null);
+  const logoInputRef = useRef(null);
+
+  // --- Логика воспроизведения медиа ---
+  const nextMedia = useCallback(() => {
+    if (mediaQueue.length > 0) {
+      setCurrentIndex((prev) => (prev + 1) % mediaQueue.length);
+    }
+  }, [mediaQueue.length]);
+
+  useEffect(() => {
+    if (mediaQueue.length === 0 || !isPlaying) return;
+    
+    const currentMedia = mediaQueue[currentIndex];
+    // Если текущий файл - изображение, запускаем таймер
+    if (currentMedia && currentMedia.type.startsWith('image/')) {
+      const timer = setTimeout(nextMedia, imageDuration * 1000);
+      return () => clearTimeout(timer);
+    }
+    // Для видео переход происходит по событию onEnded на самом элементе
+  }, [currentIndex, mediaQueue, imageDuration, isPlaying, nextMedia]);
+
+  // --- Эффект Стробоскопа ---
+  useEffect(() => {
+    if (!strobe.enabled) {
+      if (strobeRef.current) strobeRef.current.style.opacity = '0';
+      return;
+    }
+    
+    let timeoutId;
+    const loop = () => {
+      // Вероятность вспышки зависит от randomness (чем выше, тем хаотичнее пропуски)
+      const shouldFlash = Math.random() > strobe.randomness * 0.8; 
+      
+      if (shouldFlash && strobeRef.current) {
+        strobeRef.current.style.opacity = strobe.intensity;
+        // Длительность самой вспышки (короткая)
+        setTimeout(() => {
+          if (strobeRef.current) strobeRef.current.style.opacity = '0';
+        }, 30);
+      }
+      
+      timeoutId = setTimeout(loop, strobe.speed);
+    };
+    
+    loop();
+    return () => clearTimeout(timeoutId);
+  }, [strobe]);
+
+  // --- Горячие клавиши ---
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Игнорируем ввод в текстовые поля
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+
+      const key = e.key.toLowerCase();
+      
+      if (key === 'q') {
+        setSettingsOpen(prev => !prev);
+      } else if (key === 'z') {
+        setActiveOverlays(prev => ({ ...prev, 'z': !prev['z'] }));
+      } else {
+        // Проверка QR пресетов
+        const preset = qrPresets.find(p => p.key === key);
+        if (preset) {
+          setActiveOverlays(prev => ({ ...prev, [key]: !prev[key] }));
         }
-        .knob-inner {
-            width: 45px; height: 45px; border-radius: 50%; background: #2a1b32;
-            position: relative; transform: rotate(135deg); display: flex;
-            align-items: center; justify-content: center;
-        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [qrPresets]);
+
+  // --- Обработчики загрузки файлов ---
+  const handleMediaUpload = (e) => {
+    const files = Array.from(e.target.files);
+    const newMedia = files.map(file => ({
+      id: Math.random().toString(36).substr(2, 9),
+      file,
+      url: URL.createObjectURL(file),
+      type: file.type,
+      name: file.name
+    }));
+    setMediaQueue(prev => [...prev, ...newMedia]);
+  };
+
+  const removeMedia = (id) => {
+    setMediaQueue(prev => {
+      const filtered = prev.filter(m => m.id !== id);
+      if (currentIndex >= filtered.length) setCurrentIndex(Math.max(0, filtered.length - 1));
+      return filtered;
+    });
+  };
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setLogoSettings(prev => ({ ...prev, url: URL.createObjectURL(file) }));
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => console.log(err));
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  // --- Генерация данных для QR ---
+  const getQrData = (preset) => {
+    if (preset.type === 'wifi') {
+      return `WIFI:T:WPA;S:${preset.wifiSsid};P:${preset.wifiPass};;`;
+    }
+    return preset.url || 'https://example.com';
+  };
+
+  const updatePreset = (id, field, value) => {
+    setQrPresets(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+  };
+
+  // --- Рендер ---
+  const isAnyOverlayActive = Object.values(activeOverlays).some(Boolean);
+
+  return (
+    <div className="relative w-screen h-screen bg-black overflow-hidden font-sans select-none">
+      
+      {/* 1. Главный экран (Холст) */}
+      <div 
+        className="absolute inset-0 z-0 flex items-center justify-center cursor-pointer"
+        onClick={(e) => {
+          if (e.target === e.currentTarget || e.target.tagName === 'VIDEO' || e.target.tagName === 'IMG') {
+            setSettingsOpen(!settingsOpen);
+          }
+        }}
+      >
+        {mediaQueue.length > 0 ? (
+          mediaQueue[currentIndex]?.type.startsWith('video/') ? (
+            <video
+              key={mediaQueue[currentIndex].id}
+              src={mediaQueue[currentIndex].url}
+              autoPlay
+              muted
+              className="w-full h-full object-contain pointer-events-none"
+              onEnded={nextMedia}
+            />
+          ) : (
+            <img
+              key={mediaQueue[currentIndex].id}
+              src={mediaQueue[currentIndex].url}
+              className="w-full h-full object-contain pointer-events-none transition-opacity duration-500"
+              alt="media"
+            />
+          )
+        ) : (
+          <div className="text-gray-600 flex flex-col items-center">
+            <Monitor size={64} className="mb-4 opacity-50" />
+            <p className="text-xl">Холст пуст</p>
+            <p className="text-sm mt-2">Кликните или нажмите 'Q' для настройки</p>
+          </div>
+        )}
+      </div>
+
+      {/* 2. Стробоскоп (Эффект поверх контента) */}
+      <div 
+        ref={strobeRef}
+        className="absolute inset-0 z-10 bg-white pointer-events-none mix-blend-color-dodge transition-opacity duration-75"
+        style={{ opacity: 0 }}
+      />
+
+      {/* 3. Размытие фона при активных оверлеях */}
+      <div 
+        className={`absolute inset-0 z-20 bg-black/40 backdrop-blur-md pointer-events-none transition-opacity duration-500 ${isAnyOverlayActive ? 'opacity-100' : 'opacity-0'}`} 
+      />
+
+      {/* 4. Оверлеи (Логотип, QR-коды) */}
+      <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center">
+        {/* Логотип */}
+        {activeOverlays['z'] && logoSettings.url && (
+          <img 
+            src={logoSettings.url} 
+            className="absolute transition-all duration-300"
+            style={{ 
+              width: `${logoSettings.size}%`, 
+              opacity: logoSettings.opacity / 100,
+              filter: 'drop-shadow(0 20px 30px rgba(0,0,0,0.5))'
+            }} 
+            alt="Logo Overlay" 
+          />
+        )}
         
-        .mask-image-circle { mask-image: radial-gradient(circle, black 50%, transparent 50%); }
-    </style>
-</head>
-<body class="bg-background-dark font-display text-slate-100 min-h-screen flex flex-col overflow-hidden">
-
-    <div id="start-overlay" class="bg-[#0f0913]">
-        <div class="flex flex-col items-center max-w-2xl w-full p-12 rounded-3xl border border-[#332839] bg-[#161118]/80 backdrop-blur-xl shadow-[0_0_100px_rgba(0,0,0,0.5)]">
-            <div class="flex items-center gap-6 mb-12">
-                <div class="size-20 text-primary flex items-center justify-center bg-primary/20 rounded-2xl shadow-[0_0_50px_rgba(164,19,236,0.4)]">
-                    <span class="material-symbols-outlined text-6xl font-bold">equalizer</span>
-                </div>
-                <h1 class="text-6xl font-black tracking-tighter text-white">VISUALIZER PRO <span class="text-primary">V2</span></h1>
+        {/* QR Коды */}
+        {qrPresets.map(preset => (
+          activeOverlays[preset.key] && (
+            <div key={preset.id} className="absolute transition-all duration-500 animate-in zoom-in-95 fade-in">
+              <QRCodeCustom 
+                data={getQrData(preset)} 
+                dotType={preset.dotType} 
+                padding={preset.padding} 
+                bgRadius={preset.bgRadius} 
+              />
+              <p className="text-center text-white mt-6 font-medium text-xl tracking-wider uppercase drop-shadow-md">
+                {preset.name}
+              </p>
             </div>
+          )
+        ))}
+      </div>
 
-            <div class="w-full space-y-8 mb-12">
-                <div class="p-6 bg-[#1c1022] rounded-2xl border border-[#332839] flex items-center justify-between">
-                    <div class="flex items-center gap-4">
-                        <div class="p-3 bg-primary/10 rounded-xl">
-                            <span class="material-symbols-outlined text-primary text-3xl">mic</span>
-                        </div>
-                        <div>
-                            <h3 class="text-xl font-bold text-white uppercase tracking-tight">Микрофон</h3>
-                            <p class="text-sm text-slate-500 uppercase font-bold tracking-widest">Аудио-реактивность</p>
-                        </div>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="start-mic-toggle" class="sr-only peer">
-                        <div class="w-14 h-8 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:start-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary shadow-inner"></div>
-                    </label>
-                </div>
-            </div>
-
-            <button id="start-app-btn" class="w-full py-5 bg-primary hover:bg-primary/90 text-white text-2xl font-black rounded-2xl shadow-[0_0_30px_rgba(164,19,236,0.4)] transition-all active:scale-[0.98] uppercase tracking-widest">
-                Запустить
+      {/* 5. Панель настроек */}
+      <div 
+        className={`absolute top-0 right-0 h-full w-[450px] bg-zinc-900/95 backdrop-blur-xl border-l border-white/10 z-50 transition-transform duration-300 shadow-2xl flex flex-col ${settingsOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/20">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Settings className="text-blue-400" /> Настройки экрана
+          </h2>
+          <div className="flex gap-2">
+            <button onClick={toggleFullscreen} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition" title="Во весь экран">
+              <Maximize size={20} />
             </button>
-            <p class="mt-6 text-slate-500 text-xs font-bold uppercase tracking-[0.2em] animate-pulse">Готов к работе</p>
+            <button onClick={() => setSettingsOpen(false)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition" title="Закрыть (Q)">
+              <X size={20} />
+            </button>
+          </div>
         </div>
-    </div>
 
-    <div id="canvas-container">
-        <canvas id="visualizer"></canvas>
-    </div>
+        {/* Навигация по вкладкам */}
+        <div className="flex px-6 pt-4 gap-4 border-b border-white/5 overflow-x-auto custom-scrollbar">
+          {[
+            { id: 'media', icon: ImageIcon, label: 'Медиа' },
+            { id: 'qr', icon: QrCode, label: 'QR-коды' },
+            { id: 'logo', icon: ImageIcon, label: 'Лого (Z)' },
+            { id: 'strobe', icon: Zap, label: 'Эффекты' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`pb-3 flex items-center gap-2 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeTab === tab.id ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+            >
+              <tab.icon size={16} /> {tab.label}
+            </button>
+          ))}
+        </div>
 
-    <!-- UI Console -->
-    <div id="console-ui" class="active">
-        <header class="flex items-center justify-between whitespace-nowrap border-b border-[#332839] bg-[#161118] px-6 py-3 shrink-0 z-20">
-            <div class="flex items-center gap-4">
-                <div class="size-8 text-primary flex items-center justify-center bg-primary/20 rounded-lg">
-                    <span class="material-symbols-outlined text-2xl font-bold">equalizer</span>
-                </div>
-                <h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em]">Visualizer Pro v2</h2>
-            </div>
-            <nav class="flex flex-1 justify-center">
-                <div class="flex items-center gap-1 bg-[#2a1b32] p-1 rounded-xl" id="nav-tabs">
-                    <button class="nav-btn px-5 py-2 bg-primary text-white shadow-sm text-sm font-bold rounded-lg" data-tab="scene">СЦЕНА</button>
-                    <button class="nav-btn px-5 py-2 text-slate-400 text-sm font-medium hover:text-white transition-colors rounded-lg" data-tab="content">КОНТЕНТ</button>
-                    <button class="nav-btn px-5 py-2 text-slate-400 text-sm font-medium hover:text-white transition-colors rounded-lg" data-tab="glitch">ГЛИТЧ</button>
-                    <button class="nav-btn px-5 py-2 text-slate-400 text-sm font-medium hover:text-white transition-colors rounded-lg" data-tab="lights">СВЕТ</button>
-                    <button class="nav-btn px-5 py-2 text-slate-400 text-sm font-medium hover:text-white transition-colors rounded-lg" data-tab="layers">СЛОИ</button>
-                </div>
-            </nav>
-            <div class="flex items-center gap-4 justify-end">
-                <div class="flex gap-2">
-                    <button class="flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors shadow-[0_0_15px_rgba(164,19,236,0.3)]">
-                        <span class="material-symbols-outlined text-lg">videocam</span>
-                        <span>В эфир</span>
-                    </button>
-                    <button id="close-console" class="flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-[#332839] text-white text-sm font-bold hover:bg-[#4a3a52] transition-colors">
-                        <span class="material-symbols-outlined text-lg font-bold">visibility</span>
-                        <span>Превью</span>
-                    </button>
-                </div>
-                <div class="h-6 w-px bg-[#332839]"></div>
-                <div class="bg-center bg-no-repeat bg-cover rounded-full size-9 ring-2 ring-primary/30" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDzdWzaK8s_QKQFyh4TCf93bflVs8D00OKR4VBgKWQKKTtSJ6VhhoxIR9sQAlELGW1Cx9HMiNUt0tocKXzAwDOzhYnofLeC8DdkWvjFa3o_zHi2jBEWSDciShw11OmweXghzN0q58A684MVq2RqrfLZr7wPaDE5eDtpzEOSJF66N8JgrbyP6tqbYEo8d1SD2N4nLYUv97MwPPP6GfSyxDekd0qOxSLAk3G2VDOUWlmlFVZIHEOmGQ-IaXkpMnWBfopu94LtR5a_zg");'></div>
-            </div>
-        </header>
+        {/* Содержимое вкладок */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 text-gray-300 custom-scrollbar">
+          
+          {/* Вкладка: Медиа */}
+          {activeTab === 'media' && (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                <label className="text-sm font-medium text-white mb-2 block">Длительность фото: {imageDuration} сек</label>
+                <input 
+                  type="range" min="2" max="60" value={imageDuration} 
+                  onChange={(e) => setImageDuration(Number(e.target.value))}
+                  className="w-full accent-blue-500"
+                />
+              </div>
 
-        <main class="flex-1 flex overflow-hidden w-full max-w-[1600px] mx-auto p-4 gap-4">
-
-            <!-- PANEL: SCENE (СЦЕНА) -->
-            <div id="tab-scene" class="tab-panel active">
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">settings_system_daydream</span>Система</h3></div>
-                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
-                        <div class="space-y-4 p-4 bg-[#1c1022] rounded-xl border border-[#332839]">
-                            <div class="flex items-center justify-between"><span class="text-sm font-medium text-slate-300">Полноэкранный режим</span><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" type="checkbox" id="fs-toggle"/><div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div></label></div>
-                            <button id="reset-btn" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-red-500/50 text-red-500 hover:bg-red-500/10 transition-colors font-bold text-sm uppercase"><span class="material-symbols-outlined text-lg">restart_alt</span>Глобальный сброс</button>
-                        </div>
-                        <div class="pt-2 border-t border-[#332839]"><div class="flex items-center justify-between mb-4 mt-2"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">mic</span>Аудиовход</h3><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" type="checkbox" id="mic-toggle"/><div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner"></div></label></div><div class="space-y-6">
-                            <div class="space-y-2">
-                                <div class="flex justify-between items-end"><span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Уровень входа</span><span class="text-[10px] font-mono text-primary" id="mic-db-val">-3.2 dB</span></div>
-                                <div class="h-10 bg-slate-900 rounded-lg p-2 flex items-center gap-1 border border-slate-800 shadow-inner relative overflow-hidden">
-                                    <div class="flex-1 h-full flex items-end gap-[2px]">
-                                        <div class="w-1 bg-green-500 h-[40%] rounded-sm"></div><div class="w-1 bg-green-500 h-[60%] rounded-sm"></div><div class="w-1 bg-green-500 h-[85%] rounded-sm"></div><div class="w-1 bg-green-500 h-[50%] rounded-sm"></div><div class="w-1 bg-green-400 h-[90%] rounded-sm"></div><div class="w-1 bg-yellow-400 h-[80%] rounded-sm"></div><div class="w-1 bg-red-500 h-[40%] rounded-sm opacity-50"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="space-y-2"><div class="flex justify-between items-center"><label class="text-sm font-medium text-slate-400 font-bold uppercase text-xs">Чувствительность (Gain)</label><span class="text-xs font-mono bg-[#161118] px-2 py-0.5 rounded text-primary" id="gain-val">1.5</span></div><input class="w-full" max="5.0" min="0.5" step="0.1" type="range" value="1.5" id="audio-gain"/></div>
-                            <div class="space-y-2"><div class="flex justify-between items-center"><label class="text-sm font-medium text-slate-400 font-bold uppercase text-xs">Порог баса</label><span class="text-xs font-mono bg-[#161118] px-2 py-0.5 rounded text-primary" id="bass-val">170</span></div><input class="w-full" max="255" min="0" type="range" value="170" id="bass-threshold"/></div>
-                        </div></div>
-                    </div>
-                </section>
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center bg-gradient-to-r from-transparent to-primary/5">
-                        <h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">palette</span>Визуальный стиль</h3>
-                        <div class="px-2 py-1 bg-primary/10 rounded text-xs text-primary font-bold border border-primary/20" id="active-preset-name">Активен: Neon Pulse</div>
-                    </div>
-                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
-                        <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 shadow-[0_0_40px_-10px_rgba(164,19,236,0.3)] group mb-4">
-                            <canvas id="preview-scene" class="absolute inset-0 w-full h-full object-cover opacity-80"></canvas>
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                            <div class="absolute bottom-3 left-4">
-                                <div class="flex items-center gap-2">
-                                    <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
-                                    <span class="text-[10px] font-bold text-white tracking-wide uppercase">LIVE PREVIEW</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="space-y-3"><label class="text-xs font-bold uppercase tracking-wider text-slate-400">Категория</label><div class="grid grid-cols-2 gap-2" id="category-tabs"></div></div>
-                        <div class="space-y-3"><label class="text-xs font-bold uppercase tracking-wider text-slate-400">Пресеты</label><div class="grid grid-cols-3 gap-3" id="preset-grid"></div></div>
-                    </div>
-                </section>
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">blur_on</span>Атмосфера</h3></div>
-                    <div class="p-5 flex-1 overflow-y-auto space-y-8">
-                        <div class="flex flex-col items-center justify-center space-y-4 py-4"><label class="text-sm font-bold uppercase tracking-wider text-slate-400">Сдвиг цвета (Hue Shift)</label>
-                            <div class="relative size-40 rounded-full border-4 border-[#332839] flex items-center justify-center bg-[#161118]">
-                                <div class="absolute inset-2 rounded-full opacity-20 bg-[conic-gradient(from_90deg,red,yellow,lime,aqua,blue,magenta,red)] blur-md"></div>
-                                <div class="absolute inset-0 rounded-full bg-[conic-gradient(from_90deg,red,yellow,lime,aqua,blue,magenta,red)] mask-image-circle p-[2px]"></div>
-                                <div class="text-center z-10"><span class="block text-2xl font-bold text-white" id="hue-val">0°</span><span class="block text-[10px] text-slate-400 uppercase">СДВИГ</span></div>
-                            </div>
-                            <input class="w-full max-w-[200px]" max="360" min="0" type="range" value="0" id="theme-hue"/>
-                        </div>
-                        <div class="space-y-4 p-4 bg-[#1c1022] rounded-xl border border-[#332839]">
-                            <div class="flex justify-between items-center"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-slate-400">light_mode</span><label class="text-xs font-bold text-slate-300 uppercase">Яркость</label></div><span class="text-xs font-mono text-slate-400" id="bright-val">80%</span></div>
-                            <input class="w-full h-2" type="range" value="80" id="global-brightness">
-                        </div>
-                        <div class="space-y-4 p-4 bg-[#1c1022] rounded-xl border border-[#332839]">
-                            <div class="flex justify-between items-center"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary">wb_sunny</span><label class="text-xs font-bold text-slate-300 uppercase">Bloom Intensity</label></div><span class="text-xs font-mono text-primary" id="bloom-val">65%</span></div>
-                            <input class="w-full h-2" type="range" value="65" id="global-bloom">
-                        </div>
-                    </div>
-                </section>
-            </div>
-
-            <!-- PANEL: CONTENT (КОНТЕНТ) -->
-            <div id="tab-content" class="tab-panel">
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">wallpaper</span>Фоновый контент</h3></div>
-                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
-                        <div class="grid grid-cols-2 gap-3">
-                            <button class="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-[#4b3b54] rounded-xl hover:border-primary/50 hover:bg-[#3a2544] transition-all group relative"><span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary">image</span><span class="text-xs font-medium text-slate-400 group-hover:text-primary uppercase">Изображение</span><input type="file" id="bg-upload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer"></button>
-                            <button class="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-[#4b3b54] rounded-xl hover:border-primary/50 hover:bg-[#3a2544] transition-all group relative"><span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary">movie</span><span class="text-xs font-medium text-slate-400 group-hover:text-primary uppercase">Видео</span><input type="file" id="video-upload" accept="video/*" class="absolute inset-0 opacity-0 cursor-pointer"></button>
-                        </div>
-                        <div class="space-y-3"><div class="flex justify-between items-center"><label class="text-sm font-medium text-slate-400 font-bold uppercase text-xs">Прозрачность фона</label><span class="text-xs font-mono bg-[#161118] px-2 py-0.5 rounded text-primary" id="opacity-val">30%</span></div><input class="w-full" max="1" min="0" step="0.05" type="range" value="0.3" id="bg-opacity"/></div>
-                        <div class="space-y-3 pt-4 border-t border-[#332839]"><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Background FX</label>
-                        <div class="grid grid-cols-3 gap-2">
-                            <label class="cursor-pointer select-none"><input type="checkbox" class="peer sr-only" id="bg-pulse"><div class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-[#332839] bg-[#161118] peer-checked:bg-primary/20 peer-checked:border-primary peer-checked:text-primary transition-all"><span class="material-symbols-outlined text-xl">blur_on</span><span class="text-[10px] font-bold uppercase">Pulse</span></div></label>
-                            <label class="cursor-pointer select-none"><input type="checkbox" class="peer sr-only" id="bg-shake"><div class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-[#332839] bg-[#161118] peer-checked:bg-primary/20 peer-checked:border-primary peer-checked:text-primary transition-all"><span class="material-symbols-outlined text-xl">vibration</span><span class="text-[10px] font-bold uppercase">Shake</span></div></label>
-                            <label class="cursor-pointer select-none"><input type="checkbox" class="peer sr-only" id="bg-spin"><div class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-[#332839] bg-[#161118] peer-checked:bg-primary/20 peer-checked:border-primary peer-checked:text-primary transition-all"><span class="material-symbols-outlined text-xl">rotate_right</span><span class="text-[10px] font-bold uppercase">Spin</span></div></label>
-                        </div></div>
-                        <div class="bg-[#1c1022] p-4 rounded-xl border border-[#332839] space-y-3 mt-4">
-                            <div class="flex items-center justify-between"><label class="text-[10px] font-bold text-slate-500 uppercase">Плейлист (Playlist)</label><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer" id="playlist-enable"><div class="w-7 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div></label></div>
-                            <div class="grid grid-cols-2 gap-2">
-                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Длительность слайда</label><input type="number" id="playlist-duration" class="w-full bg-[#161118] border-none rounded text-xs p-1 font-mono text-center" value="10"></div>
-                                <div class="flex items-center gap-2 justify-end"><label class="text-[8px] text-slate-500 uppercase font-bold">Цикл (Loop)</label><input type="checkbox" id="playlist-loop" class="accent-primary" checked></div>
-                            </div>
-                            <div class="flex gap-2"><button id="playlist-prev" class="flex-1 py-1 bg-[#332839] rounded text-[10px] uppercase font-bold">Prev</button><button id="playlist-next" class="flex-1 py-1 bg-[#332839] rounded text-[10px] uppercase font-bold">Next</button><button id="playlist-clear" class="flex-1 py-1 bg-[#332839] rounded text-[10px] uppercase font-bold text-red-400">Clear</button></div>
-                            <div id="playlist-list" class="space-y-2 mt-2 max-h-64 overflow-y-auto pr-1"></div>
-                        </div>
-                    </div>
-                </section>
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center bg-gradient-to-r from-transparent to-primary/5"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">diamond</span>Логотип и центр</h3></div>
-                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
-                        <button class="w-full bg-[#332839] hover:bg-[#4b3b54] text-white py-2 px-4 rounded-lg font-bold text-sm flex items-center justify-center gap-2 relative uppercase transition-colors"><span class="material-symbols-outlined">upload_file</span>Заменить логотип<input type="file" id="logo-upload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer"></button>
-                        <div class="space-y-2"><div class="flex justify-between items-center"><label class="text-xs font-bold uppercase tracking-wider text-slate-500">Масштаб</label><span class="text-xs text-slate-400 font-mono" id="logo-size-val">40%</span></div><input class="w-full" max="200" min="10" type="range" value="40" id="logo-size"/></div>
-                        <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-4">
-                            <div class="flex items-center justify-between"><h4 class="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-tighter"><span class="material-symbols-outlined text-primary text-base">graphic_eq</span>Эквалайзер вокруг лого</h4><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="logo-eq-enabled" class="sr-only peer"><div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner"></div></label></div>
-                            <div class="space-y-1"><label class="text-[10px] text-slate-500 uppercase font-bold">Тип формы</label><select id="logo-eq-type" class="w-full bg-[#332839] text-white text-sm rounded-lg px-3 py-1.5 border-none appearance-none font-medium"><option value="circular">Circular Outline</option><option value="square">Square Border</option><option value="hexagon">Hexagon</option><option value="sidebars">Side Bars</option><option value="particles">Particles</option></select></div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Сила (Strength)</label><input type="range" id="logo-eq-strength" class="w-full h-1" max="5" min="0.1" step="0.1" value="1.2"></div>
-                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Отступ (Padding)</label><input type="range" id="logo-eq-padding" class="w-full h-1" max="100" min="0" value="20"></div>
-                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Закругление</label><input type="range" id="logo-eq-radius" class="w-full h-1" max="50" min="0" value="5"></div>
-                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Кол-во полос</label><input type="range" id="logo-eq-bars" class="w-full h-1" max="128" min="8" value="64"></div>
-                                <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Толщина</label><input type="range" id="logo-eq-width" class="w-full h-1" max="10" min="1" value="2"></div>
-                                <div class="space-y-1 flex items-end gap-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Замкнуть</label><input type="checkbox" id="logo-eq-closed" class="accent-primary" checked></div>
-                            </div>
-                            <div class="space-y-1"><label class="text-[8px] text-slate-500 uppercase font-bold">Свечение (Glow)</label><input type="range" id="logo-eq-glow" class="w-full h-1" max="100" min="0" value="50"></div>
-                        </div>
-                        <div class="pt-4 border-t border-[#332839]"><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">Logo FX</label><div class="grid grid-cols-2 gap-2">
-                            <label class="flex items-center gap-2 p-2 bg-[#1c1022] rounded border border-[#332839] cursor-pointer"><input type="checkbox" id="logo-fx-pulse-size" class="accent-primary"><span class="text-[10px] font-bold uppercase">Pulse Size</span></label>
-                            <label class="flex items-center gap-2 p-2 bg-[#1c1022] rounded border border-[#332839] cursor-pointer"><input type="checkbox" id="logo-fx-pulse-glow" class="accent-primary"><span class="text-[10px] font-bold uppercase">Pulse Glow</span></label>
-                            <label class="flex items-center gap-2 p-2 bg-[#1c1022] rounded border border-[#332839] cursor-pointer"><input type="checkbox" id="logo-fx-shake" class="accent-primary"><span class="text-[10px] font-bold uppercase">Shake</span></label>
-                            <label class="flex items-center gap-2 p-2 bg-[#1c1022] rounded border border-[#332839] cursor-pointer"><input type="checkbox" id="logo-fx-sway" class="accent-primary"><span class="text-[10px] font-bold uppercase">Sway</span></label>
-                        </div></div>
-                    </div>
-                </section>
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">title</span>Текстовый слой</h3></div>
-                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
-                        <textarea id="text-input" class="w-full h-20 bg-[#161118] border border-[#332839] rounded-lg p-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-none text-lg uppercase font-bold" placeholder="ВВЕДИТЕ ТЕКСТ..."></textarea>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="space-y-1"><label class="text-xs text-slate-500 block uppercase font-bold">Шрифт</label><select id="font-family" class="w-full bg-[#161118] border border-[#332839] text-white text-sm rounded-lg px-2 py-1 appearance-none font-medium"><option value="Space Grotesk">Space Grotesk</option><option value="Orbitron">Orbitron</option><option value="Impact">Impact</option></select></div>
-                            <div class="space-y-1"><label class="text-xs text-slate-500 block uppercase font-bold">Скорость</label><input type="range" id="text-speed" class="w-full h-2" value="50"></div>
-                        </div>
-                        <div class="space-y-2"><label class="text-xs text-slate-500 block uppercase font-bold">Позиция</label><div class="bg-[#161118] p-1 rounded-lg flex border border-[#332839]" id="text-position">
-                            <button class="flex-1 py-1.5 rounded text-slate-400 hover:text-white transition-colors flex justify-center items-center" data-pos="top"><span class="material-symbols-outlined text-xl">align_vertical_top</span></button>
-                            <button class="flex-1 py-1.5 rounded bg-[#3a2544] text-primary shadow-sm flex justify-center items-center" data-pos="center"><span class="material-symbols-outlined text-xl">align_vertical_center</span></button>
-                            <button class="flex-1 py-1.5 rounded text-slate-400 hover:text-white transition-colors flex justify-center items-center" data-pos="bottom"><span class="material-symbols-outlined text-xl">align_vertical_bottom</span></button>
-                        </div></div>
-                        <div class="space-y-3 pt-4 border-t border-[#332839]"><label class="text-xs font-bold text-slate-500 uppercase tracking-widest">Режим анимации</label><div class="space-y-1.5">
-                            <label class="flex items-center gap-3 p-2 rounded-lg border border-transparent bg-[#161118] cursor-pointer"><input type="radio" name="text-anim" value="static" checked class="accent-primary"><span class="text-xs font-medium uppercase">Static (Статичный)</span></label>
-                            <label class="flex items-center gap-3 p-2 rounded-lg border border-transparent bg-[#161118] cursor-pointer"><input type="radio" name="text-anim" value="pulse" class="accent-primary"><span class="text-xs font-medium uppercase">Pulse (Пульсация)</span></label>
-                            <label class="flex items-center gap-3 p-2 rounded-lg border border-transparent bg-[#161118] cursor-pointer"><input type="radio" name="text-anim" value="ping" class="accent-primary"><span class="text-xs font-medium uppercase">Ping Pong</span></label>
-                            <label class="flex items-center gap-3 p-2 rounded-lg border border-transparent bg-[#161118] cursor-pointer"><input type="radio" name="text-anim" value="floating" class="accent-primary"><span class="text-xs font-medium uppercase">Floating (Плавный)</span></label>
-                        </div></div>
-                    </div>
-                </section>
-            </div>
-
-            <!-- PANEL: GLITCH (ГЛИТЧ) -->
-            <div id="tab-glitch" class="tab-panel">
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center bg-gradient-to-r from-transparent to-primary/5"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">splitscreen</span>Каналы и разрезы</h3><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="glitch-enabled" class="sr-only peer" checked><div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner"></div></label></div>
-                    <div class="p-5 flex-1 overflow-y-auto space-y-8">
-                        <div class="space-y-4"><div class="flex items-center justify-between"><h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Разделение RGB</h4><button id="glitch-chaos" class="text-[10px] bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-0.5 rounded font-mono uppercase transition-colors">ХАОС: ВЫКЛ</button></div>
-                        <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-5">
-                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Сила смещения</label><span class="text-xs text-primary font-mono" id="rgb-amount-val">12px</span></div><input class="w-full h-1" max="100" min="0" type="range" value="12" id="glitch-rgb-amount"/></div>
-                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Интенсивность</label><span class="text-xs text-primary font-mono" id="rgb-intensity-val">45%</span></div><input class="w-full h-1" max="100" min="0" type="range" value="45" id="glitch-rgb-intensity"/></div>
-                            <div class="grid grid-cols-3 gap-2 pt-2">
-                                <button class="rgb-mode-btn flex flex-col items-center justify-center p-2 rounded-lg bg-primary/20 border border-primary text-primary" data-mode="pattern"><span class="material-symbols-outlined">pattern</span><span class="text-[10px] font-bold uppercase mt-1">Паттерн</span></button>
-                                <button class="rgb-mode-btn flex flex-col items-center justify-center p-2 rounded-lg bg-[#332839] text-slate-400 hover:text-white" data-mode="horizontal"><span class="material-symbols-outlined">swap_horiz</span><span class="text-[10px] font-bold uppercase mt-1">Гориз.</span></button>
-                                <button class="rgb-mode-btn flex flex-col items-center justify-center p-2 rounded-lg bg-[#332839] text-slate-400 hover:text-white" data-mode="vertical"><span class="material-symbols-outlined">swap_vert</span><span class="text-[10px] font-bold uppercase mt-1">Верт.</span></button>
-                            </div>
-                        </div></div>
-                        <div class="space-y-4 pt-4 border-t border-[#332839]"><div class="flex items-center justify-between"><h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Разрез пикселей</h4><div class="flex gap-1 bg-[#161118] p-1 rounded-md"><button class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-700 text-white uppercase">Г</button><button class="px-2 py-0.5 text-[10px] font-bold rounded text-slate-500 uppercase">В</button></div></div>
-                        <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-4"><div class="space-y-2"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Плотность (Density)</label><span class="text-[10px] text-primary font-mono" id="slice-density-val">8</span></div><input type="range" id="glitch-slice-density" class="w-full h-1" max="50" min="1" value="8"></div><div class="space-y-2"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Сдвиг (Shift)</label><span class="text-[10px] text-primary font-mono" id="slice-shift-val">22%</span></div><input type="range" id="glitch-slice-shift" class="w-full h-1" max="100" min="0" value="22"></div></div></div>
-                    </div>
-                </section>
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">noise_control_off</span>Шум и искажения</h3></div>
-                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
-                        <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-slate-800 flex items-center justify-center group shadow-[0_0_20px_rgba(164,19,236,0.15)] mb-4">
-                            <canvas id="preview-glitch" class="absolute inset-0 w-full h-full object-cover opacity-80"></canvas>
-                            <div class="absolute bottom-2 right-2 bg-black/80 text-[8px] px-2 py-1 rounded text-primary font-mono border border-primary/20 uppercase font-bold">FX PREVIEW</div>
-                        </div>
-                        <div class="space-y-4 pt-2"><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><span class="material-symbols-outlined text-sm">grain</span> Цифровой шум</h4>
-                        <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-5">
-                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Сила зерна</label><span class="text-xs text-primary font-mono" id="noise-amount-val">15%</span></div><input class="w-full h-1" max="100" min="0" type="range" value="15" id="glitch-noise-amount"/></div>
-                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Цветной шум</label><span class="text-xs text-primary font-mono" id="color-noise-val">80%</span></div><input class="w-full h-1" max="100" min="0" type="range" value="80" id="glitch-color-noise"/></div>
-                        </div></div>
-                        <div class="space-y-4 pt-2"><div class="flex justify-between items-center"><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><span class="material-symbols-outlined text-sm">grid_view</span> Разброс блоков</h4><label class="relative inline-flex items-center"><input type="checkbox" id="glitch-scatter-random" class="sr-only peer"><div class="w-7 h-4 bg-slate-700 rounded-full peer peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-3"></div></label></div>
-                        <div class="bg-[#1c1022] rounded-xl p-4 border border-[#332839] space-y-5">
-                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Размер блока</label><span class="text-xs text-primary font-mono" id="block-size-val">64px</span></div><input class="w-full h-1" max="128" min="16" step="16" type="range" value="64" id="glitch-block-size"/></div>
-                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 uppercase font-bold">Дальность</label><span class="text-xs text-primary font-mono" id="scatter-range-val">10%</span></div><input class="w-full h-1" max="100" min="0" type="range" value="10" id="glitch-scatter-range"/></div>
-                        </div></div>
-                    </div>
-                </section>
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">bolt</span>Триггер-эффекты</h3></div>
-                    <div class="p-5 flex-1 flex flex-col gap-6">
-                        <div class="space-y-4"><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider uppercase">Доп. эффекты</h4>
-                        <div class="grid grid-cols-2 gap-3">
-                            <button id="fx-invert" class="fx-btn flex flex-col items-center justify-center p-4 rounded-xl border border-[#332839] bg-[#1c1022] hover:bg-[#3a2544] hover:border-primary transition-all uppercase" data-fx="invert"><span class="material-symbols-outlined text-4xl text-slate-400">invert_colors</span><span class="text-[10px] font-bold text-slate-400 mt-2 tracking-widest uppercase">Инверсия</span></button>
-                            <button id="fx-zoom" class="fx-btn flex flex-col items-center justify-center p-4 rounded-xl border border-primary bg-primary/10 transition-all uppercase shadow-[0_0_15px_rgba(164,19,236,0.15)]" data-fx="zoom"><span class="material-symbols-outlined text-4xl text-primary animate-pulse">zoom_in_map</span><span class="text-[10px] font-bold text-primary mt-2 tracking-widest uppercase">Beat Zoom</span></button>
-                        </div></div>
-                    </div>
-                </section>
-            </div>
-
-            <!-- PANEL: LIGHTS (СВЕТ) -->
-            <div id="tab-lights" class="tab-panel">
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">flash_on</span>Стробоскоп</h3><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="strobe-active" class="sr-only peer" checked><div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner"></div></label></div>
-                    <div class="p-6 flex-1 overflow-y-auto space-y-8">
-                        <div class="space-y-3"><label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Цвет вспышки</label>
-                            <div class="flex items-center gap-3"><input type="color" id="strobe-color" value="#a413ec" class="size-12 rounded-lg bg-transparent border-none cursor-pointer shadow-[0_0_15px_rgba(164,19,236,0.5)]"><input class="w-full bg-[#161118] border border-[#332839] rounded px-3 py-2 text-sm font-mono text-white uppercase" type="text" value="#A413EC" id="strobe-hex"/></div>
-                        </div>
-                        <div class="space-y-6">
-                            <div class="space-y-2"><div class="flex justify-between items-center"><label class="text-sm font-medium text-slate-300 uppercase font-bold text-xs tracking-tighter">Частота (Frequency)</label><span class="text-xs font-mono bg-[#161118] px-2 py-0.5 rounded text-primary" id="strobe-speed-val">12 Hz</span></div><input class="w-full h-1" max="60" min="1" type="range" value="12" id="strobe-speed"/></div>
-                            <div class="space-y-2"><div class="flex justify-between items-center"><label class="text-sm font-medium text-slate-300 uppercase font-bold text-xs tracking-tighter">Ширина импульса</label><span class="text-xs font-mono bg-[#161118] px-2 py-0.5 rounded text-primary" id="strobe-pulse-val">45 ms</span></div><input class="w-full h-1" max="200" min="10" type="range" value="45" id="strobe-pulse-width"/></div>
-                        </div>
-                        <div class="flex flex-col items-center justify-center pt-4 border-t border-[#332839]"><h4 class="text-[10px] font-bold text-slate-500 mb-6 uppercase tracking-widest">Аудиореактивность</h4><div class="knob-container"><div class="knob-inner"><span class="material-symbols-outlined text-slate-400">music_note</span></div></div><div class="mt-4 text-[10px] font-mono text-primary uppercase">СИНХРО: БАС (70%)</div></div>
-                    </div>
-                </section>
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center bg-gradient-to-r from-transparent to-primary/5"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">all_inclusive</span>Лазерное шоу</h3><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="laser-active" class="sr-only peer"><div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner"></div></label></div>
-                    <div class="p-5 flex-1 overflow-y-auto space-y-6">
-                        <div class="space-y-3"><label class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Паттерн</label><div class="grid grid-cols-5 gap-2" id="laser-presets">
-                            <button class="laser-btn aspect-square rounded-lg bg-primary text-white flex items-center justify-center shadow-[0_0_10px_rgba(164,19,236,0.4)] transition-all" data-preset="scan"><span class="material-symbols-outlined text-2xl">radar</span></button>
-                            <button class="laser-btn aspect-square rounded-lg bg-[#161118] text-slate-500 hover:text-primary transition-colors flex items-center justify-center" data-preset="rain"><span class="material-symbols-outlined text-2xl">water_drop</span></button>
-                            <button class="laser-btn aspect-square rounded-lg bg-[#161118] text-slate-500 hover:text-primary transition-colors flex items-center justify-center" data-preset="cross"><span class="material-symbols-outlined text-2xl">close</span></button>
-                            <button class="laser-btn aspect-square rounded-lg bg-[#161118] text-slate-500 hover:text-primary transition-colors flex items-center justify-center" data-preset="cone"><span class="material-symbols-outlined text-2xl">change_history</span></button>
-                            <button class="laser-btn aspect-square rounded-lg bg-[#161118] text-slate-500 hover:text-primary transition-colors flex items-center justify-center" data-preset="random"><span class="material-symbols-outlined text-2xl">grain</span></button>
-                        </div></div>
-                        <div class="bg-[#1c1022] p-4 rounded-xl border border-[#332839] space-y-4">
-                            <div class="flex justify-between items-center"><label class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Параметры лучей</label><div class="size-4 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div></div>
-                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 font-bold uppercase">Кол-во лучей</label><span class="text-[10px] text-slate-400 font-mono" id="laser-count-val">24</span></div><input class="w-full h-1" max="100" min="1" type="range" value="24" id="laser-count"/></div>
-                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 font-bold uppercase">Толщина</label><span class="text-[10px] text-slate-400 font-mono" id="laser-thick-val">2.5px</span></div><input class="w-full h-1" max="10" min="1" step="0.5" type="range" value="2.5" id="laser-thickness"/></div>
-                            <div class="space-y-1"><div class="flex justify-between"><label class="text-[10px] text-slate-500 font-bold uppercase">Скорость</label><span class="text-[10px] text-slate-400 font-mono" id="laser-speed-val">80%</span></div><input class="w-full h-1" max="100" min="1" type="range" value="80" id="laser-speed"/></div>
-                            <div id="laser-color-preview" class="h-6 bg-primary rounded transition-colors relative cursor-pointer shadow-inner mt-2"><input type="color" id="laser-color" value="#a413ec" class="absolute inset-0 opacity-0 cursor-pointer"></div>
-                        </div>
-                    </div>
-                </section>
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">cloud</span>Атмосфера</h3></div>
-                    <div class="p-6 flex-1 flex flex-col gap-6">
-                        <div class="space-y-4"><div class="flex items-center gap-3"><div class="p-2 bg-[#161118] rounded-lg"><span class="material-symbols-outlined text-slate-400">foggy</span></div><div><h4 class="text-sm font-bold text-white uppercase tracking-wider uppercase">Плотность тумана</h4><p class="text-[8px] text-slate-500 uppercase">Симуляция объемного света</p></div></div>
-                        <input class="w-full h-1" max="100" min="0" type="range" value="65" id="fog-density"/><div class="flex justify-between text-[10px] text-slate-500 font-mono mt-1"><span>ЯСНО</span><span>ДЫМКА</span><span>ГУСТО</span></div></div>
-                        <div class="pt-4 border-t border-[#332839] space-y-4"><div class="flex items-center gap-3"><div class="p-2 bg-[#161118] rounded-lg"><span class="material-symbols-outlined text-slate-400">wb_sunny</span></div><div><h4 class="text-sm font-bold text-white uppercase tracking-wider uppercase">Свечение и Блум</h4><p class="text-[8px] text-slate-500 uppercase">Интенсивность рассеивания света</p></div></div>
-                        <div class="space-y-4 px-2">
-                            <div class="space-y-1"><label class="text-[10px] text-slate-500 uppercase font-bold">Порог</label><input type="range" id="bloom-threshold" class="w-full h-1" value="40"></div>
-                            <div class="space-y-1"><label class="text-[10px] text-slate-500 uppercase font-bold">Радиус</label><input type="range" id="bloom-radius" class="w-full h-1" value="75"></div>
-                            <div class="space-y-1"><label class="text-[10px] text-slate-500 uppercase font-bold">Интенсивность</label><input type="range" id="bloom-intensity" class="w-full h-1" value="90"></div>
-                        </div></div>
-                    </div>
-                </section>
-            </div>
-
-            <!-- PANEL: LAYERS (СЛОИ) -->
-            <div id="tab-layers" class="tab-panel">
-                <section class="flex flex-col w-2/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20 relative">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center bg-gradient-to-r from-transparent to-primary/5"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">layers</span>Стек слоев</h3><span class="text-xs text-slate-500 font-mono bg-[#3a2544] px-2 py-1 rounded" id="layer-count-badge">6 АКТИВНЫХ СЛОЕВ</span></div>
-                    <div class="flex-1 overflow-y-auto p-4 space-y-3" id="layer-list"></div>
-                    <div class="p-4 border-t border-[#332839] bg-[#201526] flex gap-3"><button class="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors uppercase text-sm"><span class="material-symbols-outlined">add_circle</span>Добавить слой</button><button class="bg-red-500/10 text-red-500 p-2.5 rounded-lg border border-red-500/20 hover:bg-red-500/20 transition-colors"><span class="material-symbols-outlined">delete</span></button></div>
-                </section>
-                <section class="flex flex-col w-1/3 min-w-[320px] bg-surface-dark rounded-xl border border-[#332839] overflow-hidden shadow-lg shadow-black/20">
-                    <div class="p-4 border-b border-[#332839] flex justify-between items-center"><h3 class="text-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">tune</span>Свойства</h3></div>
-                    <div class="p-5 flex-1 overflow-y-auto space-y-6" id="layer-props-panel">
-                        <div class="flex items-start gap-3 pb-4 border-b border-[#332839]">
-                            <div class="size-16 rounded-lg bg-black border border-primary/50 shrink-0 shadow-[0_0_15px_rgba(164,19,236,0.3)] flex items-center justify-center"><span class="material-symbols-outlined text-primary text-3xl">all_inclusive</span></div>
-                            <div><h4 class="font-bold text-white text-lg">Laser Beams</h4><span class="text-xs text-primary font-mono uppercase">ID: LYR-02</span><div class="mt-1 flex gap-2"><span class="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30 uppercase">Генеративный</span></div></div>
-                        </div>
-                        <div class="space-y-2"><label class="text-xs font-bold uppercase tracking-wider text-slate-500">Режим смешивания</label><select class="w-full bg-[#161118] text-white text-sm rounded-lg px-3 py-2 border border-[#332839] appearance-none font-medium"><option>Normal</option><option selected>Add</option><option>Screen</option><option>Multiply</option></select></div>
-                        <div class="space-y-3"><div class="flex justify-between items-center"><label class="text-xs font-bold uppercase tracking-wider text-slate-500">Прозрачность</label><span class="text-xs font-mono bg-primary/20 text-primary px-2 py-0.5 rounded">100%</span></div><input class="w-full h-1" type="range" value="100"/></div>
-                        <div class="grid grid-cols-2 gap-4 pt-2">
-                            <div class="space-y-1"><label class="text-[10px] font-bold uppercase text-slate-500">Масштаб X</label><input class="w-full bg-[#161118] border-none rounded p-1.5 text-xs text-center font-mono" type="number" value="100"/></div>
-                            <div class="space-y-1"><label class="text-[10px] font-bold uppercase text-slate-500">Масштаб Y</label><input class="w-full bg-[#161118] border-none rounded p-1.5 text-xs text-center font-mono" type="number" value="100"/></div>
-                        </div>
-                    </div>
-                </section>
-            </div>
-
-        </main>
-    </div>
-
-<script>
-class VisualizerApp {
-    constructor() {
-        this.canvas = document.getElementById('visualizer');
-        this.ctx = this.canvas.getContext('2d', { alpha: false, desynchronized: true });
-        this.previews = {
-            scene: document.getElementById('preview-scene'),
-            glitch: document.getElementById('preview-glitch')
-        };
-        this.width = window.innerWidth; this.height = window.innerHeight;
-        this.audioCtx = null; this.analyser = null; this.source = null; this.dataArray = null; this.bassLevel = 0;
-        this.bgImage = null; this.bgVideo = null; this.logoImage = null;
-        this.isRunning = false; this.time = 0; this.isMenuOpen = true;
-        this.config = {
-            micEnabled: false,
-            theme: 'club_tunnel', themeHue: 280, gain: 2.2, bassThreshold: 150,
-            brightness: 100, bloom: { threshold: 25, radius: 100, intensity: 100 },
-            bg: { opacity: 0.5, pulse: true, shake: true, spin: false },
-            playlist: { enabled: false, duration: 10, loop: true, items: [], index: 0, lastSwitch: 0 },
-            logo: { size: 40, fx: { pulseSize: false, pulseGlow: false, shake: false, sway: false }, eq: { enabled: false, type: 'circular', strength: 1.2, padding: 20, radius: 5, bars: 64, width: 2, closed: true, glow: 50 } },
-            text: { content: '', font: 'Space Grotesk', pos: 'center', anim: 'static', speed: 50 },
-            glitch: { enabled: true, rgbAmount: 12, rgbIntensity: 45, rgbChaos: false, rgbMode: 'pattern', noiseAmount: 15, colorNoise: 80, blockAmount: 64, scatterRandom: false, scatterRange: 10, invert: false, zoom: true, sliceDensity: 8, sliceShift: 22 },
-            strobe: { active: true, color: '#a413ec', speed: 12, pulseWidth: 45, lastFlash: 0 },
-            laser: { active: false, preset: 'scan', color: '#a413ec', count: 24, thickness: 2.5, speed: 80 },
-            fog: 65,
-            layerOrder: ['background', 'visuals', 'logo', 'text', 'lasers', 'glitch']
-        };
-        this.selectedLayer = 'visuals';
-        this.init();
-    }
-    init() {
-        this.resize(); window.addEventListener('resize', () => this.resize());
-        window.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'q') this.toggleMenu(); });
-        this.canvas.addEventListener('click', () => this.toggleMenu());
-        document.getElementById('close-console').onclick = () => this.toggleMenu();
-        this.themes = this.getThemes();
-        this.populateUI(); this.attachListeners(); this.setupTabs();
-
-        const startMic = document.getElementById('start-mic-toggle');
-        const startBtn = document.getElementById('start-app-btn');
-
-        startMic.onchange = (e) => {
-            this.updateMicEnabled(e.target.checked);
-        };
-
-        startBtn.onclick = () => {
-            this.startApp();
-            document.getElementById('start-overlay').style.display = 'none';
-        };
-    }
-    updateMicEnabled(enabled) {
-        this.config.micEnabled = enabled;
-        const mainMic = document.getElementById('mic-toggle');
-        const startMic = document.getElementById('start-mic-toggle');
-        if (mainMic && mainMic.checked !== enabled) mainMic.checked = enabled;
-        if (startMic && startMic.checked !== enabled) startMic.checked = enabled;
-
-        if (enabled && this.isRunning) {
-            this.startAudio();
-        }
-    }
-    startApp() {
-        this.isRunning = true;
-        if (this.config.micEnabled) {
-            this.startAudio();
-        } else {
-            this.animate();
-        }
-    }
-    toggleMenu() {
-        const ui = document.getElementById('console-ui');
-        this.isMenuOpen = !this.isMenuOpen;
-        if(this.isMenuOpen) {
-            ui.classList.add('active');
-            ui.style.pointerEvents = 'auto';
-        } else {
-            ui.classList.remove('active');
-            ui.style.pointerEvents = 'none';
-        }
-    }
-    resize() { this.width = window.innerWidth; this.height = window.innerHeight; this.canvas.width = this.width; this.canvas.height = this.height; }
-    async startAudio() {
-        try {
-            if (!this.audioCtx) {
-                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
-
-            if (!this.source) {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                this.analyser = this.audioCtx.createAnalyser(); this.analyser.fftSize = 2048;
-                this.source = this.audioCtx.createMediaStreamSource(stream);
-                this.source.connect(this.analyser);
-                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-            }
-
-            if (!this.isRunning) {
-                this.isRunning = true;
-                this.animate();
-            }
-        } catch (err) {
-            console.error("Audio start failed:", err);
-            this.updateMicEnabled(false);
-            if (!this.isRunning) { this.isRunning = true; this.animate(); }
-        }
-    }
-    analyzeAudio() {
-        if (!this.analyser || !this.config.micEnabled) {
-            this.bassLevel = 0;
-            if (this.dataArray) this.dataArray.fill(0);
-            return;
-        }
-        this.analyser.getByteFrequencyData(this.dataArray);
-        let bassSum = 0; for(let i=0; i<10; i++) bassSum += this.dataArray[i];
-        this.bassLevel = Math.min((bassSum / 10) * this.config.gain, 255);
-
-        // Update DB label visually
-        const dbLabel = document.getElementById('mic-db-val');
-        if (dbLabel && this.time % 10 === 0) {
-            const avg = this.dataArray.reduce((a, b) => a + b, 0) / this.dataArray.length;
-            const db = (20 * Math.log10(avg / 255)).toFixed(1);
-            dbLabel.innerText = isFinite(db) ? db + ' dB' : '-∞ dB';
-        }
-    }
-    getThemes() {
-        return {
-            'bar': { name: "Bar / Chill", icon: 'local_bar', presets: { 'bar_chill': { name: "Warm Flow" }, 'bar_neon': { name: "Neon Bars" } } },
-            'club': { name: "Club / Dance", icon: 'nightlife', presets: { 'club_tunnel': { name: "Hyper Tunnel" }, 'club_bass': { name: "Bass Cannon" } } },
-            'concert': { name: "Concert / Epic", icon: 'stadium', presets: { 'concert_city': { name: "Neon City" }, 'concert_stage': { name: "Epic Stage" } } },
-            'cyber': { name: "Cyber / Future", icon: 'memory', presets: { 'cyber_punk': { name: "Neon Pulse" }, 'cyber_grid': { name: "Cyber Grid" } } },
-            'space': { name: "Space / Void", icon: 'rocket_launch', presets: { 'space_void': { name: "Starfield" } } }
-        };
-    }
-    renderBackground() {
-        if (this.config.playlist.enabled && this.config.playlist.items.length > 0) {
-            const now = Date.now();
-            if (now - this.config.playlist.lastSwitch > this.config.playlist.duration * 1000) {
-                this.config.playlist.index = (this.config.playlist.index + 1) % this.config.playlist.items.length;
-                this.switchToPlaylistItem(this.config.playlist.index);
-                this.config.playlist.lastSwitch = now;
-            }
-        }
-        let media = this.bgVideo || this.bgImage;
-        if (media) {
-            const isVideo = media.tagName === 'VIDEO';
-            if (isVideo && (media.paused || media.ended)) media.play().catch(() => {});
-
-            this.ctx.save();
-            this.ctx.globalAlpha = this.config.bg.opacity;
-            this.ctx.imageSmoothingEnabled = true;
-
-            let scaleMult = 1;
-            if (this.config.bg.pulse && this.bassLevel > this.config.bassThreshold) scaleMult = 1.05;
-
-            const mw = isVideo ? media.videoWidth : media.width;
-            const mh = isVideo ? media.videoHeight : media.height;
-            if (mw > 0 && mh > 0) {
-                this.ctx.translate(this.width / 2, this.height / 2);
-                if (this.config.bg.spin) this.ctx.rotate(this.time * 0.01);
-                if (this.config.bg.shake && this.bassLevel > this.config.bassThreshold) {
-                    this.ctx.translate(Math.random() * 20 - 10, Math.random() * 20 - 10);
-                }
-
-                const scale = Math.max(this.width / mw, this.height / mh) * scaleMult;
-                const dw = mw * scale;
-                const dh = mh * scale;
-
-                // DrawImage with destination coordinates is usually faster than context scaling for large media
-                this.ctx.drawImage(media, -dw / 2, -dh / 2, dw, dh);
-            }
-            this.ctx.restore();
-        }
-    }
-    switchToPlaylistItem(index) {
-        const item = this.config.playlist.items[index];
-        if (!item) return;
-        if (this.bgVideo) { this.bgVideo.pause(); }
-        if (item.type === 'video') {
-            this.bgVideo = item.el;
-            this.bgImage = null;
-            this.bgVideo.play().catch(() => {});
-        } else {
-            this.bgImage = item.el;
-            this.bgVideo = null;
-        }
-        this.updatePlaylistUI();
-    }
-    renderVisuals() {
-        this.ctx.save();
-        const hue = this.config.themeHue;
-        const isBeat = this.bassLevel > this.config.bassThreshold;
-
-        switch(this.config.theme) {
-            case 'cyber_punk': // Neon Pulse
-                const barW = this.width / 64;
-                for(let i=0; i<64; i++) {
-                    const val = this.dataArray[i*2];
-                    const h = (val / 255) * this.height * 0.6;
-                    const opacity = 0.5 + (val / 510);
-                    this.ctx.fillStyle = `hsla(${hue + i*2}, 80%, 60%, ${opacity})`;
-                    if (isBeat) {
-                        this.ctx.shadowBlur = 15;
-                        this.ctx.shadowColor = `hsl(${hue + i*2}, 80%, 60%)`;
-                    } else {
-                        this.ctx.shadowBlur = 0;
-                    }
-                    this.ctx.fillRect(i * barW, this.height/2 - h/2, barW - 4, h);
-                }
-                this.ctx.shadowBlur = 0;
-                break;
-
-            case 'cyber_grid':
-                this.ctx.strokeStyle = `hsla(${hue}, 80%, 50%, 0.3)`;
-                this.ctx.lineWidth = 1;
-                const gridSpacing = 50 + (isBeat ? 10 : 0);
-                for(let x=0; x<this.width; x+=gridSpacing) {
-                    this.ctx.beginPath(); this.ctx.moveTo(x, 0); this.ctx.lineTo(x, this.height); this.ctx.stroke();
-                }
-                for(let y=0; y<this.height; y+=gridSpacing) {
-                    this.ctx.beginPath(); this.ctx.moveTo(0, y); this.ctx.lineTo(this.width, y); this.ctx.stroke();
-                }
-                // Perspective lines
-                this.ctx.strokeStyle = `hsla(${hue}, 80%, 50%, 0.5)`;
-                for(let i=0; i<12; i++) {
-                    const angle = (i/12) * Math.PI * 2;
-                    this.ctx.beginPath(); this.ctx.moveTo(this.width/2, this.height/2);
-                    const r = Math.max(this.width, this.height) * (0.5 + (this.dataArray[i*10]/510));
-                    this.ctx.lineTo(this.width/2 + Math.cos(angle)*r, this.height/2 + Math.sin(angle)*r);
-                    this.ctx.stroke();
-                }
-                break;
-
-            case 'club_tunnel':
-                this.ctx.translate(this.width/2, this.height/2);
-                for(let i=0; i<8; i++) {
-                    const r = ((this.time * 2 + i * 100) % 800);
-                    const val = this.dataArray[i*15];
-                    const beatScale = isBeat ? 1.2 : 1.0;
-                    this.ctx.strokeStyle = `hsla(${hue + i*20}, 80%, 50%, ${1 - r/800})`;
-                    this.ctx.lineWidth = 5 + (val/50);
-                    this.ctx.beginPath();
-                    this.ctx.arc(0, 0, r * beatScale, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                }
-                break;
-
-            case 'bar_chill': // Warm Flow
-                this.ctx.beginPath();
-                this.ctx.moveTo(0, this.height);
-                for(let i=0; i<128; i++) {
-                    const val = this.dataArray[i];
-                    const x = (i/127) * this.width;
-                    const y = this.height/2 + Math.sin(i*0.1 + this.time*0.02) * (val * 0.5);
-                    this.ctx.lineTo(x, y);
-                }
-                this.ctx.lineTo(this.width, this.height);
-                const grad = this.ctx.createLinearGradient(0, this.height/2, 0, this.height);
-                grad.addColorStop(0, `hsla(${hue}, 70%, 50%, 0.6)`);
-                grad.addColorStop(1, `hsla(${hue + 40}, 70%, 30%, 0)`);
-                this.ctx.fillStyle = grad;
-                this.ctx.fill();
-                break;
-
-            case 'space_void': // Starfield
-                for(let i=0; i<50; i++) {
-                    const x = (Math.sin(i + this.time*0.01) * this.width * 0.5) + this.width/2;
-                    const y = (Math.cos(i * 1.5 + this.time*0.005) * this.height * 0.5) + this.height/2;
-                    const s = (this.dataArray[i % 128] / 255) * 5;
-                    this.ctx.fillStyle = `white`;
-                    this.ctx.beginPath(); this.ctx.arc(x, y, s, 0, Math.PI*2); this.ctx.fill();
-                }
-                break;
-
-            case 'bar_neon':
-                const step = this.width / 40;
-                for(let i=0; i<40; i++) {
-                    const h = (this.dataArray[i*3] / 255) * this.height * 0.5;
-                    this.ctx.fillStyle = `hsl(${hue + i*5}, 100%, 50%)`;
-                    this.ctx.shadowBlur = 15;
-                    this.ctx.shadowColor = `hsl(${hue + i*5}, 100%, 50%)`;
-                    this.ctx.fillRect(i*step, this.height - h, step-10, 5);
-                }
-                break;
-
-            case 'club_bass':
-                this.ctx.translate(this.width/2, this.height/2);
-                if(isBeat) this.ctx.scale(1.1, 1.1);
-                for(let i=0; i<4; i++) {
-                    const r = (this.dataArray[i*10]/255) * 200 + 100;
-                    this.ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
-                    this.ctx.lineWidth = 10;
-                    this.ctx.beginPath();
-                    this.ctx.arc(0, 0, r + i*30, 0, Math.PI*2);
-                    this.ctx.stroke();
-                }
-                break;
-
-            case 'concert_city':
-                for(let i=0; i<20; i++) {
-                    const h = (this.dataArray[i*5]/255) * this.height * 0.8;
-                    const w = this.width / 20;
-                    this.ctx.fillStyle = `hsla(${hue}, 50%, 20%, 0.5)`;
-                    this.ctx.fillRect(i*w, this.height - h, w-5, h);
-                    this.ctx.fillStyle = `hsla(${hue}, 100%, 70%, 0.8)`;
-                    this.ctx.fillRect(i*w, this.height - h, w-5, 10);
-                }
-                break;
-
-            case 'concert_stage':
-                this.ctx.translate(this.width/2, 0);
-                for(let i=0; i<10; i++) {
-                    const angle = (i/9) * Math.PI - Math.PI;
-                    const len = Math.max(this.width, this.height);
-                    const val = this.dataArray[i*10];
-                    this.ctx.strokeStyle = `hsla(${hue}, 100%, 50%, ${val/255})`;
-                    this.ctx.lineWidth = 20;
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(0,0);
-                    this.ctx.lineTo(Math.cos(angle)*len, Math.sin(angle)*len);
-                    this.ctx.stroke();
-                }
-                break;
-
-            default:
-                const bW = this.width / 128;
-                this.ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
-                for(let i=0; i<128; i++) {
-                    const h = (this.dataArray[i] / 255) * this.height * 0.4;
-                    this.ctx.fillRect(i * bW, this.height - h, bW - 1, h);
-                }
-        }
-        this.ctx.restore();
-    }
-    renderLogo() {
-        if (!this.logoImage) return;
-        this.ctx.save();
-        let scale = (this.config.logo.size / 100);
-        const isBeat = this.bassLevel > this.config.bassThreshold;
-        if (this.config.logo.fx.pulseSize && isBeat) scale *= 1.1;
-        this.ctx.translate(this.width/2, this.height/2);
-        if (this.config.logo.fx.sway) this.ctx.rotate(Math.sin(this.time * 0.05) * 0.1);
-        if (this.config.logo.fx.shake && isBeat) this.ctx.translate(Math.random()*10-5, Math.random()*10-5);
-
-        const lw = this.logoImage.width * scale; const lh = this.logoImage.height * scale;
-        if (this.config.logo.fx.pulseGlow && isBeat) {
-            this.ctx.shadowBlur = this.config.logo.eq.glow;
-            this.ctx.shadowColor = `hsl(${this.config.themeHue}, 100%, 50%)`;
-        }
-
-        this.ctx.drawImage(this.logoImage, -lw/2, -lh/2, lw, lh);
-
-        if (this.config.logo.eq.enabled) {
-            this.renderLogoEq(lw, lh, isBeat);
-        }
-        this.ctx.restore();
-    }
-    renderLogoEq(lw, lh, isBeat) {
-        this.ctx.strokeStyle = `hsl(${this.config.themeHue}, 100%, 50%)`;
-        this.ctx.lineWidth = this.config.logo.eq.width;
-        const radius = (Math.max(lw, lh) / 2) + this.config.logo.eq.padding;
-        const bars = this.config.logo.eq.bars;
-        const type = this.config.logo.eq.type;
-
-        if (type === 'circular') {
-            this.ctx.beginPath();
-            for(let i=0; i<bars; i++) {
-                const angle = (i / bars) * Math.PI * 2;
-                const val = this.dataArray[Math.floor((i/bars)*128)];
-                const strength = (val / 255) * 50 * this.config.logo.eq.strength;
-                const r = radius + strength;
-                const x = Math.cos(angle) * r; const y = Math.sin(angle) * r;
-                if (i === 0) this.ctx.moveTo(x, y); else this.ctx.lineTo(x, y);
-            }
-            if (this.config.logo.eq.closed) this.ctx.closePath();
-            this.ctx.stroke();
-        } else if (type === 'square') {
-            const r = radius + (isBeat ? 10 : 0);
-            const side = r * 2;
-            const rad = this.config.logo.eq.radius;
-            this.ctx.beginPath();
-            this.ctx.roundRect(-side/2, -side/2, side, side, rad);
-            this.ctx.stroke();
-        } else if (type === 'hexagon') {
-            this.ctx.beginPath();
-            for(let i=0; i<6; i++) {
-                const angle = (i / 6) * Math.PI * 2;
-                const r = radius + (isBeat ? 20 : 0);
-                const x = Math.cos(angle) * r; const y = Math.sin(angle) * r;
-                if (i === 0) this.ctx.moveTo(x, y); else this.ctx.lineTo(x, y);
-            }
-            this.ctx.closePath(); this.ctx.stroke();
-        } else if (type === 'sidebars') {
-            const h = lh * 0.8;
-            for(let i=0; i<20; i++) {
-                const val = this.dataArray[i*2];
-                const barH = (val/255) * h;
-                this.ctx.fillStyle = `hsl(${this.config.themeHue}, 80%, 50%)`;
-                this.ctx.fillRect(-lw/2 - 20 - i*5, -barH/2, 3, barH);
-                this.ctx.fillRect(lw/2 + 20 + i*5, -barH/2, 3, barH);
-            }
-        } else if (type === 'particles') {
-            for(let i=0; i<bars; i++) {
-                const angle = (i/bars) * Math.PI * 2 + (this.time * 0.01);
-                const val = this.dataArray[i % 128];
-                const r = radius + (val/255) * 100;
-                this.ctx.fillStyle = `white`;
-                this.ctx.beginPath();
-                this.ctx.arc(Math.cos(angle)*r, Math.sin(angle)*r, 2, 0, Math.PI*2);
-                this.ctx.fill();
-            }
-        }
-    }
-    renderText() {
-        if (!this.config.text.content) return;
-        this.ctx.save(); this.ctx.font = `bold 48px ${this.config.text.font}`; this.ctx.fillStyle = '#fff'; this.ctx.textAlign = 'center';
-        let x = this.width / 2; let y = this.height / 2;
-        if (this.config.text.pos === 'top') y = 100;
-        if (this.config.text.pos === 'bottom') y = this.height - 100;
-        const isBeat = this.bassLevel > this.config.bassThreshold;
-        if (this.config.text.anim === 'pulse' && isBeat) { this.ctx.translate(x, y); this.ctx.scale(1.2, 1.2); x = 0; y = 0; }
-        else if (this.config.text.anim === 'floating') { y += Math.sin(this.time * 0.05) * 20; }
-        else if (this.config.text.anim === 'ping') { x = (this.width / 2) + Math.sin(this.time * 0.02) * (this.width / 3); }
-        this.ctx.fillText(this.config.text.content, x, y); this.ctx.restore();
-    }
-    renderGlitch() {
-        if (!this.config.glitch.enabled) return;
-        const isBeat = this.bassLevel > this.config.bassThreshold;
-        if (isBeat && this.config.glitch.zoom) {
-            const z = 1.04;
-            this.ctx.drawImage(this.canvas, -this.width*(z-1)/2, -this.height*(z-1)/2, this.width * z, this.height * z);
-        }
-        if (isBeat && this.config.glitch.rgbAmount > 0) {
-            const amt = this.config.glitch.rgbAmount;
-            const offset = amt * (this.config.glitch.rgbChaos ? (Math.random()*2-1) : 1);
-            this.ctx.save();
-            this.ctx.globalCompositeOperation = 'screen';
-            this.ctx.globalAlpha = this.config.glitch.rgbIntensity / 100;
-            if (this.config.glitch.rgbMode === 'horizontal') {
-                this.ctx.drawImage(this.canvas, offset, 0);
-            } else if (this.config.glitch.rgbMode === 'vertical') {
-                this.ctx.drawImage(this.canvas, 0, offset);
-            } else {
-                this.ctx.drawImage(this.canvas, offset, offset);
-            }
-            this.ctx.restore();
-        }
-        if (isBeat && this.config.glitch.sliceDensity > 0) {
-            const density = this.config.glitch.sliceDensity;
-            const shiftAmt = (this.config.glitch.sliceShift / 100) * this.width;
-            const h = this.height / density;
-            for(let i=0; i<density; i++) {
-                const shift = (Math.random()-0.5) * shiftAmt;
-                this.ctx.drawImage(this.canvas, 0, i*h, this.width, h, shift, i*h, this.width, h);
-            }
-        }
-        if (isBeat && this.config.glitch.scatterRandom) {
-            const size = this.config.glitch.blockAmount;
-            for(let i=0; i<10; i++) {
-                const x = Math.random() * this.width; const y = Math.random() * this.height;
-                const dist = this.config.glitch.scatterRange;
-                this.ctx.drawImage(this.canvas, x, y, size, size, x + (Math.random()-0.5)*dist, y + (Math.random()-0.5)*dist, size, size);
-            }
-        }
-        if (this.config.glitch.noiseAmount > 0 && Math.random() < (this.config.glitch.noiseAmount / 100)) {
-            this.ctx.fillStyle = `rgba(255,255,255,0.1)`;
-            for(let i=0; i<5; i++) this.ctx.fillRect(0, Math.random()*this.height, this.width, 2);
-        }
-        if (isBeat && this.config.glitch.invert) { this.ctx.save(); this.ctx.globalCompositeOperation = 'difference'; this.ctx.fillStyle = 'white'; this.ctx.fillRect(0,0,this.width, this.height); this.ctx.restore(); }
-    }
-    renderLasers() {
-        if (!this.config.laser.active) return;
-        this.ctx.save();
-        this.ctx.strokeStyle = this.config.laser.color;
-        if (this.config.laser.color === '#a413ec') {
-            this.ctx.strokeStyle = `hsl(${this.config.themeHue}, 100%, 50%)`;
-        }
-        this.ctx.lineWidth = this.config.laser.thickness;
-        this.ctx.globalAlpha = 0.6;
-        this.ctx.shadowBlur = 15;
-        this.ctx.shadowColor = this.ctx.strokeStyle;
-        const count = this.config.laser.count;
-        const speed = this.config.laser.speed / 100;
-        const preset = this.config.laser.preset;
-
-        if (preset === 'scan') {
-            this.ctx.translate(this.width/2, this.height/2);
-            for(let i=0; i<count; i++) {
-                const angle = (this.time * speed * 0.05) + (i / count) * Math.PI * 2;
-                this.ctx.beginPath(); this.ctx.moveTo(0, 0);
-                this.ctx.lineTo(Math.cos(angle) * this.width, Math.sin(angle) * this.height);
-                this.ctx.stroke();
-            }
-        } else if (preset === 'rain') {
-            for(let i=0; i<count; i++) {
-                const x = (i/count) * this.width;
-                const val = this.dataArray[Math.floor((i/count)*128)];
-                this.ctx.beginPath(); this.ctx.moveTo(x, 0);
-                this.ctx.lineTo(x + Math.sin(this.time*0.02)*100, (val/255)*this.height);
-                this.ctx.stroke();
-            }
-        } else if (preset === 'cross') {
-            for(let i=0; i<count/2; i++) {
-                const y = (i/(count/2)) * this.height;
-                const val = this.dataArray[i*2];
-                this.ctx.beginPath(); this.ctx.moveTo(0, y); this.ctx.lineTo(this.width, y + Math.sin(this.time*0.05)*100); this.ctx.stroke();
-                this.ctx.beginPath(); this.ctx.moveTo(this.width, y); this.ctx.lineTo(0, y + Math.cos(this.time*0.05)*100); this.ctx.stroke();
-            }
-        } else {
-            this.ctx.translate(this.width/2, this.height/2);
-            for(let i=0; i<count; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                this.ctx.beginPath(); this.ctx.moveTo(0,0);
-                this.ctx.lineTo(Math.cos(angle)*this.width, Math.sin(angle)*this.height);
-                this.ctx.stroke();
-            }
-        }
-        this.ctx.restore();
-    }
-    renderStrobe() {
-        if (!this.config.strobe.active) return;
-        const isBeat = this.bassLevel > this.config.bassThreshold;
-        const interval = 1000 / this.config.strobe.speed;
-        const now = Date.now();
-        if (now - this.config.strobe.lastFlash > interval) {
-            let flashProb = 1.0;
-            // High reactivity makes strobe more likely to fire on beat
-            if (isBeat) flashProb = 1.0;
-            else flashProb = 0.3;
-
-            if (Math.random() < flashProb) {
-                this.ctx.save();
-                let color = this.config.strobe.color;
-                if (color === '#a413ec') color = `hsl(${this.config.themeHue}, 100%, 50%)`;
-                this.ctx.fillStyle = color;
-                this.ctx.globalAlpha = isBeat ? 0.4 : 0.15;
-                this.ctx.fillRect(0, 0, this.width, this.height);
-                this.ctx.restore();
-            }
-            this.config.strobe.lastFlash = now;
-        }
-    }
-    animate() {
-        if(!this.isRunning) return; this.time++; this.analyzeAudio();
-        this.ctx.fillStyle = '#000'; this.ctx.fillRect(0,0,this.width, this.height);
-        this.config.layerOrder.forEach(layerId => {
-            if(layerId === 'background') this.renderBackground();
-            if(layerId === 'visuals') this.renderVisuals();
-            if(layerId === 'logo') this.renderLogo();
-            if(layerId === 'text') this.renderText();
-            if(layerId === 'lasers') this.renderLasers();
-            if(layerId === 'glitch') this.renderGlitch();
-        });
-        this.renderStrobe();
-        if (this.config.brightness < 100) {
-            this.ctx.save(); this.ctx.globalCompositeOperation = 'multiply';
-            const b = this.config.brightness / 100; this.ctx.fillStyle = `rgb(${255*b},${255*b},${255*b})`; this.ctx.fillRect(0,0,this.width, this.height); this.ctx.restore();
-        }
-
-        // Update Previews
-        if (this.isMenuOpen && this.time % 2 === 0) {
-            for (const key in this.previews) {
-                const pCanvas = this.previews[key];
-                if (pCanvas && pCanvas.offsetParent !== null) { // Only if visible
-                    const pCtx = pCanvas.getContext('2d');
-                    if (!pCanvas.width) { pCanvas.width = 320; pCanvas.height = 180; }
-                    pCtx.drawImage(this.canvas, 0, 0, pCanvas.width, pCanvas.height);
-                }
-            }
-        }
-
-        requestAnimationFrame(() => this.animate());
-    }
-    setupTabs() {
-        const btns = document.querySelectorAll('.nav-btn');
-        const panels = document.querySelectorAll('.tab-panel');
-        btns.forEach(btn => {
-            btn.onclick = () => {
-                btns.forEach(b => { b.classList.remove('bg-primary', 'text-white', 'shadow-sm', 'font-bold'); b.classList.add('text-slate-400', 'font-medium'); });
-                btn.classList.add('bg-primary', 'text-white', 'shadow-sm', 'font-bold'); btn.classList.remove('text-slate-400', 'font-medium');
-                panels.forEach(p => p.classList.remove('active'));
-                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-            };
-        });
-    }
-    populateUI() {
-        const catContainer = document.getElementById('category-tabs');
-        for (const [key, val] of Object.entries(this.themes)) {
-            const btn = document.createElement('button');
-            btn.className = "px-3 py-2 bg-[#1c1022] hover:bg-[#332839] text-slate-300 rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2 uppercase";
-            btn.innerHTML = `<span class="material-symbols-outlined text-base">${val.icon}</span> ${val.name}`;
-            btn.onclick = () => this.updatePresets(key);
-            catContainer.appendChild(btn);
-        }
-        this.updatePresets('cyber'); this.populateLayers();
-    }
-    updatePresets(catKey) {
-        const grid = document.getElementById('preset-grid'); grid.innerHTML = '';
-        const presets = this.themes[catKey].presets;
-        for(const [pkey, pval] of Object.entries(presets)) {
-            const item = document.createElement('div');
-            item.className = "group relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-transparent hover:border-primary transition-all active:scale-95";
-            item.innerHTML = `<div class="absolute inset-0 bg-slate-800 flex items-center justify-center transition-transform group-hover:scale-110"><span class="material-symbols-outlined text-white text-3xl">play_arrow</span></div><div class="absolute bottom-0 left-0 right-0 p-1 bg-black/60 text-[8px] text-white text-center backdrop-blur-sm uppercase font-bold tracking-widest leading-tight">${pval.name}</div>`;
-            item.onclick = () => { this.config.theme = pkey; document.getElementById('active-preset-name').innerText = 'Активен: ' + pval.name; };
-            grid.appendChild(item);
-        }
-    }
-    populateLayers() {
-        const list = document.getElementById('layer-list'); list.innerHTML = '';
-        const labels = { 'background': 'Фоновый контент', 'visuals': 'Визуализация', 'logo': 'Логотип и центр', 'text': 'Текстовый слой', 'lasers': 'Лазерное шоу', 'glitch': 'Пост-эффекты (Глитч)' };
-        const icons = { 'background': 'wallpaper', 'visuals': 'equalizer', 'logo': 'diamond', 'text': 'title', 'lasers': 'all_inclusive', 'glitch': 'splitscreen' };
-        const types = { 'background': 'Media', 'visuals': 'Generative', 'logo': 'Image', 'text': 'Text', 'lasers': 'Generative', 'glitch': 'FX' };
-
-        // Render order: last in array is top-most. UI: top-most should be first in list.
-        const uiOrder = [...this.config.layerOrder].reverse();
-        uiOrder.forEach((id, idx) => {
-            const div = document.createElement('div');
-            div.className = `flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${this.selectedLayer === id ? 'bg-primary/10 border-primary ring-1 ring-primary/20 shadow-[0_0_15px_rgba(164,19,236,0.15)]' : 'bg-[#332839]/60 border-[#4b3b54] hover:border-primary/50'}`;
-            div.onclick = (e) => { if(!e.target.closest('button')) { this.selectedLayer = id; this.populateLayers(); this.updateLayerProps(); } };
-
-            const moveLayer = (dir) => {
-                const index = this.config.layerOrder.indexOf(id);
-                const newIndex = index + dir;
-                if (newIndex >= 0 && newIndex < this.config.layerOrder.length) {
-                    const temp = this.config.layerOrder[index];
-                    this.config.layerOrder[index] = this.config.layerOrder[newIndex];
-                    this.config.layerOrder[newIndex] = temp;
-                    this.populateLayers();
-                }
-            };
-
-            div.innerHTML = `<div class="flex flex-col gap-1 text-slate-400"><button class="up-btn hover:text-white transition-colors"><span class="material-symbols-outlined text-lg">expand_less</span></button><button class="down-btn hover:text-white transition-colors"><span class="material-symbols-outlined text-lg">expand_more</span></button></div><div class="size-10 rounded bg-black flex items-center justify-center border border-[#4b3b54] group-hover:border-primary/50 transition-colors shadow-inner"><span class="material-symbols-outlined ${this.selectedLayer === id ? 'text-primary' : 'text-white'} text-lg opacity-60">${icons[id]}</span></div><div class="flex-1 min-w-0"><div class="flex items-center gap-2"><span class="text-sm font-bold text-white ${this.selectedLayer === id ? 'text-primary' : ''}">${labels[id]}</span><span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-primary/20 text-primary border border-primary/30 uppercase tracking-tighter">${types[id]}</span></div></div><div class="flex items-center gap-1"><button class="p-2 text-primary hover:bg-white/5 rounded-lg transition-colors"><span class="material-symbols-outlined text-lg font-bold">visibility</span></button><div class="w-px h-6 bg-slate-700 mx-1"></div><span class="text-xs font-mono text-slate-500 w-6 text-right">0${idx+1}</span></div>`;
-            div.querySelector('.up-btn').onclick = (e) => { e.stopPropagation(); moveLayer(1); };
-            div.querySelector('.down-btn').onclick = (e) => { e.stopPropagation(); moveLayer(-1); };
-            list.appendChild(div);
-        });
-        document.getElementById('layer-count-badge').innerText = `${this.config.layerOrder.length} АКТИВНЫХ СЛОЕВ`;
-        this.updateLayerProps();
-    }
-    updateLayerProps() {
-        const panel = document.getElementById('layer-props-panel');
-        const labels = { 'background': 'Фоновый контент', 'visuals': 'Визуализация', 'logo': 'Логотип и центр', 'text': 'Текстовый слой', 'lasers': 'Лазерное шоу', 'glitch': 'Пост-эффекты (Глитч)' };
-        const icons = { 'background': 'wallpaper', 'visuals': 'equalizer', 'logo': 'diamond', 'text': 'title', 'lasers': 'all_inclusive', 'glitch': 'splitscreen' };
-        const types = { 'background': 'Media', 'visuals': 'Generative', 'logo': 'Image', 'text': 'Text', 'lasers': 'Generative', 'glitch': 'FX' };
-        const id = this.selectedLayer;
-        panel.innerHTML = `
-            <div class="flex items-start gap-3 pb-4 border-b border-[#332839]">
-                <div class="size-16 rounded-lg bg-black border border-primary/50 shrink-0 shadow-[0_0_15px_rgba(164,19,236,0.3)] flex items-center justify-center"><span class="material-symbols-outlined text-primary text-3xl">${icons[id]}</span></div>
-                <div><h4 class="font-bold text-white text-lg">${labels[id]}</h4><span class="text-xs text-primary font-mono uppercase">ID: LYR-${id.substring(0,3).toUpperCase()}</span><div class="mt-1 flex gap-2"><span class="px-2 py-0.5 rounded text-[8px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30 uppercase">${types[id]}</span></div></div>
-            </div>
-            <div class="space-y-2"><label class="text-xs font-bold uppercase tracking-wider text-slate-500">Режим смешивания</label><select class="w-full bg-[#161118] text-white text-sm rounded-lg px-3 py-2 border border-[#332839] appearance-none font-medium"><option>Normal</option><option selected>Add</option><option>Screen</option><option>Multiply</option></select></div>
-            <div class="space-y-3"><div class="flex justify-between items-center"><label class="text-xs font-bold uppercase tracking-wider text-slate-500">Прозрачность</label><span class="text-xs font-mono bg-primary/20 text-primary px-2 py-0.5 rounded">100%</span></div><input class="w-full h-1" type="range" value="100"/></div>
-            <div class="grid grid-cols-2 gap-4 pt-2">
-                <div class="space-y-1"><label class="text-[10px] font-bold uppercase text-slate-500">Масштаб X</label><input class="w-full bg-[#161118] border-none rounded p-1.5 text-xs text-center font-mono" type="number" value="100"/></div>
-                <div class="space-y-1"><label class="text-[10px] font-bold uppercase text-slate-500">Масштаб Y</label><input class="w-full bg-[#161118] border-none rounded p-1.5 text-xs text-center font-mono" type="number" value="100"/></div>
-            </div>
-        `;
-    }
-    updatePlaylistUI() {
-        const list = document.getElementById('playlist-list');
-        if (!list) return;
-        list.innerHTML = '';
-        this.config.playlist.items.forEach((item, idx) => {
-            const isActive = idx === this.config.playlist.index;
-            const div = document.createElement('div');
-            div.className = `flex items-center gap-3 p-2 rounded-lg border transition-all cursor-pointer group ${isActive ? 'bg-primary/10 border-primary/30' : 'bg-[#1c1022] border-transparent hover:border-[#4b3b54]'}`;
-
-            let thumbContent = '';
-            if (item.type === 'img') {
-                thumbContent = `<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${item.el.src}')"></div>`;
-            } else {
-                thumbContent = `<div class="absolute inset-0 flex items-center justify-center text-slate-600 bg-slate-900"><span class="material-symbols-outlined">movie</span></div>`;
-            }
-
-            div.innerHTML = `
-                <div class="${isActive ? 'text-primary' : 'text-slate-500 group-hover:text-white'}">
-                    <span class="material-symbols-outlined text-lg">${isActive ? 'play_arrow' : 'drag_indicator'}</span>
-                </div>
-                <div class="size-10 bg-black rounded overflow-hidden relative shrink-0 border border-[#332839]">
-                    ${thumbContent}
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="text-[11px] font-bold ${isActive ? 'text-primary' : 'text-slate-200'} truncate">${item.name}</div>
-                    <div class="text-[9px] text-slate-500 uppercase">${item.type === 'video' ? '00:30s • MP4' : 'IMAGE • PNG'}</div>
-                </div>
-                <button class="delete-item text-slate-500 hover:text-red-500 transition-colors">
-                    <span class="material-symbols-outlined text-lg">delete</span>
+              <div>
+                <input 
+                  type="file" multiple accept="image/*,video/*" className="hidden" 
+                  ref={fileInputRef} onChange={handleMediaUpload}
+                  onClick={(e) => e.target.value = null}
+                />
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition"
+                >
+                  <Upload size={18} /> Добавить медиафайлы
                 </button>
-            `;
+              </div>
 
-            div.onclick = (e) => {
-                if (!e.target.closest('.delete-item')) {
-                    this.config.playlist.index = idx;
-                    this.switchToPlaylistItem(idx);
-                }
-            };
-            div.querySelector('.delete-item').onclick = (e) => {
-                e.stopPropagation();
-                this.config.playlist.items.splice(idx, 1);
-                if (this.config.playlist.index >= this.config.playlist.items.length) {
-                    this.config.playlist.index = Math.max(0, this.config.playlist.items.length - 1);
-                }
-                if (this.config.playlist.items.length === 0) {
-                    this.bgImage = null; this.bgVideo = null;
-                } else if (isActive) {
-                    this.switchToPlaylistItem(this.config.playlist.index);
-                }
-                this.updatePlaylistUI();
-            };
-            list.appendChild(div);
-        });
-    }
-    attachListeners() {
-        const setVal = (path, val) => {
-            let obj = this.config; const parts = path.split('.');
-            for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
-            obj[parts[parts.length - 1]] = val;
-        };
-        const bind = (id, path, labelId, suffix = '', isPercentage = false) => {
-            const el = document.getElementById(id); const label = document.getElementById(labelId);
-            if (!el) return; el.oninput = (e) => {
-                const val = parseFloat(e.target.value); setVal(path, val);
-                if (label) {
-                    if (isPercentage) label.innerText = Math.round(val) + '%';
-                    else if (suffix === '%') label.innerText = Math.round(val * 100) + '%';
-                    else label.innerText = val + suffix;
-                }
-            };
-        };
+              {mediaQueue.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-sm mb-3">
+                    <span className="text-gray-400">Очередь воспроизведения ({mediaQueue.length})</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setIsPlaying(!isPlaying)} className="p-1 hover:bg-white/10 rounded text-white">
+                        {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                      </button>
+                      <button onClick={nextMedia} className="p-1 hover:bg-white/10 rounded text-white">
+                        <SkipForward size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    {mediaQueue.map((item, idx) => (
+                      <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg bg-black/40 border ${idx === currentIndex ? 'border-blue-500/50' : 'border-transparent'}`}>
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <div className="w-12 h-12 bg-zinc-800 rounded flex-shrink-0 overflow-hidden">
+                            {item.type.startsWith('video/') ? (
+                              <video src={item.url} className="w-full h-full object-cover opacity-70" />
+                            ) : (
+                              <img src={item.url} className="w-full h-full object-cover" alt="" />
+                            )}
+                          </div>
+                          <p className="text-sm truncate w-32">{item.name}</p>
+                        </div>
+                        <button onClick={() => removeMedia(item.id)} className="p-2 text-red-400 hover:bg-red-400/20 rounded-md transition">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
-        bind('audio-gain', 'gain', 'gain-val'); bind('bass-threshold', 'bassThreshold', 'bass-val');
-        bind('theme-hue', 'themeHue', 'hue-val', '°'); bind('global-brightness', 'brightness', 'bright-val', '%', true);
-        bind('global-bloom', 'bloom.intensity', 'bloom-val', '%', true);
-        bind('bg-opacity', 'bg.opacity', 'opacity-val', '%');
+          {/* Вкладка: QR-коды */}
+          {activeTab === 'qr' && (
+            <div className="space-y-6 animate-in fade-in">
+              <p className="text-sm text-gray-400">
+                Настройте быстрые клавиши для вывода QR-кодов поверх экрана.
+              </p>
+              
+              {qrPresets.map((preset, index) => (
+                <div key={preset.id} className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4 relative">
+                  {index > 0 && (
+                    <button 
+                      onClick={() => setQrPresets(prev => prev.filter(p => p.id !== preset.id))}
+                      className="absolute top-3 right-3 text-gray-500 hover:text-red-400"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Название / Текст</label>
+                      <input 
+                        type="text" value={preset.name} 
+                        onChange={(e) => updatePreset(preset.id, 'name', e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Клавиша запуска</label>
+                      <input 
+                        type="text" maxLength="1" value={preset.key.toUpperCase()} 
+                        onChange={(e) => updatePreset(preset.id, 'key', e.target.value.toLowerCase())}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 text-center" 
+                      />
+                    </div>
+                  </div>
 
-        const micToggle = document.getElementById('mic-toggle');
-        if (micToggle) {
-            micToggle.onchange = (e) => {
-                this.updateMicEnabled(e.target.checked);
-            };
+                  <div className="flex gap-2 p-1 bg-black/50 rounded-lg">
+                    <button 
+                      onClick={() => updatePreset(preset.id, 'type', 'url')}
+                      className={`flex-1 py-1 text-sm rounded-md transition ${preset.type === 'url' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                    >
+                      Ссылка
+                    </button>
+                    <button 
+                      onClick={() => updatePreset(preset.id, 'type', 'wifi')}
+                      className={`flex-1 py-1 text-sm rounded-md transition ${preset.type === 'wifi' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                    >
+                      Wi-Fi
+                    </button>
+                  </div>
+
+                  {preset.type === 'url' ? (
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">URL ссылка</label>
+                      <input 
+                        type="text" value={preset.url} 
+                        onChange={(e) => updatePreset(preset.id, 'url', e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Имя сети (SSID)</label>
+                        <input 
+                          type="text" value={preset.wifiSsid} 
+                          onChange={(e) => updatePreset(preset.id, 'wifiSsid', e.target.value)}
+                          className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Пароль</label>
+                        <input 
+                          type="text" value={preset.wifiPass} 
+                          onChange={(e) => updatePreset(preset.id, 'wifiPass', e.target.value)}
+                          className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-3 border-t border-white/5 space-y-4">
+                    <p className="text-xs font-medium text-white">Внешний вид</p>
+                    
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Стиль точек кода</label>
+                      <select 
+                        value={preset.dotType}
+                        onChange={(e) => updatePreset(preset.id, 'dotType', e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="square">Квадратные</option>
+                        <option value="dots">Точки</option>
+                        <option value="rounded">Скругленные</option>
+                        <option value="classy">Классические (мягкие)</option>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Размер полей: {preset.padding}px</label>
+                        <input 
+                          type="range" min="0" max="64" value={preset.padding} 
+                          onChange={(e) => updatePreset(preset.id, 'padding', Number(e.target.value))}
+                          className="w-full accent-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Скругление фона: {preset.bgRadius}px</label>
+                        <input 
+                          type="range" min="0" max="64" value={preset.bgRadius} 
+                          onChange={(e) => updatePreset(preset.id, 'bgRadius', Number(e.target.value))}
+                          className="w-full accent-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <button 
+                onClick={() => setQrPresets(prev => [...prev, { id: Math.random().toString(), key: '', name: 'Новый код', type: 'url', url: '', wifiSsid: '', wifiPass: '', bgRadius: 16, padding: 16, dotType: 'square' }])}
+                className="w-full py-3 border border-dashed border-white/20 hover:border-blue-500 hover:text-blue-400 rounded-xl font-medium flex items-center justify-center gap-2 transition"
+              >
+                <Plus size={18} /> Добавить пресет
+              </button>
+            </div>
+          )}
+
+          {/* Вкладка: Логотип */}
+          {activeTab === 'logo' && (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-start gap-4">
+                <AlertCircle className="text-blue-400 flex-shrink-0 mt-0.5" size={20} />
+                <p className="text-sm text-gray-300">
+                  Логотип будет появляться поверх транслируемого контента при нажатии клавиши <kbd className="bg-black/50 px-2 py-0.5 rounded border border-white/20 text-white mx-1">Z</kbd>. Задний план будет слегка размыт.
+                </p>
+              </div>
+
+              <div>
+                <input 
+                  type="file" accept="image/*" className="hidden" 
+                  ref={logoInputRef} onChange={handleLogoUpload}
+                />
+                <button 
+                  onClick={() => logoInputRef.current?.click()}
+                  className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition border border-white/5"
+                >
+                  <Upload size={18} /> Загрузить PNG логотип
+                </button>
+              </div>
+
+              {logoSettings.url && (
+                <div className="space-y-6 bg-black/20 p-4 rounded-xl border border-white/5 mt-4">
+                  <div className="h-40 bg-zinc-900 rounded-lg flex items-center justify-center overflow-hidden relative checkerboard-bg">
+                    <img 
+                      src={logoSettings.url} 
+                      style={{ width: `${logoSettings.size}%`, opacity: logoSettings.opacity / 100 }} 
+                      alt="Logo preview" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-white mb-2 flex justify-between">
+                      <span>Размер на экране</span>
+                      <span className="text-blue-400">{logoSettings.size}%</span>
+                    </label>
+                    <input 
+                      type="range" min="5" max="100" value={logoSettings.size} 
+                      onChange={(e) => setLogoSettings(prev => ({ ...prev, size: Number(e.target.value) }))}
+                      className="w-full accent-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-white mb-2 flex justify-between">
+                      <span>Непрозрачность</span>
+                      <span className="text-blue-400">{logoSettings.opacity}%</span>
+                    </label>
+                    <input 
+                      type="range" min="10" max="100" value={logoSettings.opacity} 
+                      onChange={(e) => setLogoSettings(prev => ({ ...prev, opacity: Number(e.target.value) }))}
+                      className="w-full accent-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Вкладка: Стробоскоп */}
+          {activeTab === 'strobe' && (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 p-5 rounded-xl border border-blue-500/20">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-white font-bold flex items-center gap-2">
+                    <Zap size={18} className="text-yellow-400" /> Стробоскоп
+                  </h3>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={strobe.enabled}
+                      onChange={(e) => setStrobe(prev => ({ ...prev, enabled: e.target.checked }))}
+                    />
+                    <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Эффект высвечивания белых и светлых элементов фона. Отлично работает поверх контрастных изображений и видео.
+                </p>
+              </div>
+
+              <div className={`space-y-6 ${strobe.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none transition-opacity'}`}>
+                <div>
+                  <label className="text-sm font-medium text-white mb-2 flex justify-between">
+                    <span>Интенсивность</span>
+                    <span>{Math.round(strobe.intensity * 100)}%</span>
+                  </label>
+                  <input 
+                    type="range" min="0.1" max="1" step="0.05" value={strobe.intensity} 
+                    onChange={(e) => setStrobe(prev => ({ ...prev, intensity: Number(e.target.value) }))}
+                    className="w-full accent-yellow-400"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Яркость вспышки</p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-white mb-2 flex justify-between">
+                    <span>Скорость (интервал)</span>
+                    <span>{strobe.speed} мс</span>
+                  </label>
+                  <input 
+                    type="range" min="30" max="1000" step="10" value={strobe.speed} 
+                    onChange={(e) => setStrobe(prev => ({ ...prev, speed: Number(e.target.value) }))}
+                    className="w-full accent-yellow-400"
+                    style={{ direction: 'rtl' }} // Меньше мс = быстрее, инвертируем для логики
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Быстро</span>
+                    <span>Медленно</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-white mb-2 flex justify-between">
+                    <span>Хаотичность мерцания</span>
+                    <span>{Math.round(strobe.randomness * 100)}%</span>
+                  </label>
+                  <input 
+                    type="range" min="0" max="0.9" step="0.1" value={strobe.randomness} 
+                    onChange={(e) => setStrobe(prev => ({ ...prev, randomness: Number(e.target.value) }))}
+                    className="w-full accent-yellow-400"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Ритмично</span>
+                    <span>Рвано</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      <style dangerouslySetInnerHTML={{__html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
+        .checkerboard-bg {
+          background-image: linear-gradient(45deg, #18181b 25%, transparent 25%), 
+                            linear-gradient(-45deg, #18181b 25%, transparent 25%), 
+                            linear-gradient(45deg, transparent 75%, #18181b 75%), 
+                            linear-gradient(-45deg, transparent 75%, #18181b 75%);
+          background-size: 20px 20px;
+          background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         }
-
-        document.getElementById('bg-pulse').onchange = (e) => this.config.bg.pulse = e.target.checked;
-        document.getElementById('bg-shake').onchange = (e) => this.config.bg.shake = e.target.checked;
-        document.getElementById('bg-spin').onchange = (e) => this.config.bg.spin = e.target.checked;
-        document.getElementById('playlist-enable').onchange = (e) => this.config.playlist.enabled = e.target.checked;
-        document.getElementById('playlist-duration').onchange = (e) => this.config.playlist.duration = parseInt(e.target.value);
-        document.getElementById('playlist-loop').onchange = (e) => this.config.playlist.loop = e.target.checked;
-
-        bind('logo-size', 'logo.size', 'logo-size-val', '%', true);
-        document.getElementById('logo-eq-enabled').onchange = (e) => this.config.logo.eq.enabled = e.target.checked;
-        document.getElementById('logo-eq-type').onchange = (e) => this.config.logo.eq.type = e.target.value;
-        bind('logo-eq-strength', 'logo.eq.strength', null); bind('logo-eq-padding', 'logo.eq.padding', null);
-        bind('logo-eq-radius', 'logo.eq.radius', null); bind('logo-eq-bars', 'logo.eq.bars', null);
-        bind('logo-eq-width', 'logo.eq.width', null); bind('logo-eq-glow', 'logo.eq.glow', null);
-        document.getElementById('logo-eq-closed').onchange = (e) => this.config.logo.eq.closed = e.target.checked;
-        document.getElementById('logo-fx-pulse-size').onchange = (e) => this.config.logo.fx.pulseSize = e.target.checked;
-        document.getElementById('logo-fx-pulse-glow').onchange = (e) => this.config.logo.fx.pulseGlow = e.target.checked;
-        document.getElementById('logo-fx-shake').onchange = (e) => this.config.logo.fx.shake = e.target.checked;
-        document.getElementById('logo-fx-sway').onchange = (e) => this.config.logo.fx.sway = e.target.checked;
-
-        document.getElementById('text-input').oninput = (e) => this.config.text.content = e.target.value;
-        document.getElementById('font-family').onchange = (e) => this.config.text.font = e.target.value;
-        bind('text-speed', 'text.speed', null);
-        document.querySelectorAll('#text-position button').forEach(btn => {
-            btn.onclick = () => {
-                document.querySelectorAll('#text-position button').forEach(b => b.classList.remove('bg-[#3a2544]', 'text-primary', 'shadow-sm'));
-                btn.classList.add('bg-[#3a2544]', 'text-primary', 'shadow-sm'); this.config.text.pos = btn.dataset.pos;
-            };
-        });
-        document.querySelectorAll('input[name="text-anim"]').forEach(radio => {
-            radio.onchange = (e) => {
-                if (e.target.checked) this.config.text.anim = e.target.value;
-            };
-        });
-
-        document.getElementById('glitch-enabled').onchange = (e) => this.config.glitch.enabled = e.target.checked;
-        bind('glitch-rgb-amount', 'glitch.rgbAmount', 'rgb-amount-val', 'px');
-        bind('glitch-rgb-intensity', 'glitch.rgbIntensity', 'rgb-intensity-val', '%', true);
-        document.getElementById('glitch-chaos').onclick = () => {
-            this.config.glitch.rgbChaos = !this.config.glitch.rgbChaos;
-            document.getElementById('glitch-chaos').innerText = `ХАОС: ${this.config.glitch.rgbChaos ? 'ВКЛ' : 'ВЫКЛ'}`;
-        };
-        document.querySelectorAll('.rgb-mode-btn').forEach(btn => {
-            btn.onclick = () => {
-                document.querySelectorAll('.rgb-mode-btn').forEach(b => { b.classList.remove('bg-primary/20', 'text-primary', 'border-primary'); b.classList.add('bg-[#332839]', 'text-slate-400'); });
-                btn.classList.add('bg-primary/20', 'text-primary', 'border-primary'); btn.classList.remove('bg-[#332839]', 'text-slate-400');
-                this.config.glitch.rgbMode = btn.dataset.mode;
-            };
-        });
-        bind('glitch-slice-density', 'glitch.sliceDensity', 'slice-density-val');
-        bind('glitch-slice-shift', 'glitch.sliceShift', 'slice-shift-val', '%', true);
-        bind('glitch-noise-amount', 'glitch.noiseAmount', 'noise-amount-val', '%', true);
-        bind('glitch-color-noise', 'glitch.colorNoise', 'color-noise-val', '%', true);
-        document.getElementById('glitch-scatter-random').onchange = (e) => this.config.glitch.scatterRandom = e.target.checked;
-        bind('glitch-block-size', 'glitch.blockAmount', 'block-size-val', 'px');
-        bind('glitch-scatter-range', 'glitch.scatterRange', 'scatter-range-val', '%', true);
-        document.querySelectorAll('.fx-btn').forEach(btn => {
-            btn.onclick = () => {
-                const fx = btn.dataset.fx; this.config.glitch[fx] = !this.config.glitch[fx];
-                btn.classList.toggle('border-primary', this.config.glitch[fx]); btn.classList.toggle('bg-primary/10', this.config.glitch[fx]);
-            };
-        });
-
-        document.getElementById('strobe-active').onchange = (e) => this.config.strobe.active = e.target.checked;
-        bind('strobe-speed', 'strobe.speed', 'strobe-speed-val', ' Hz');
-        bind('strobe-pulse-width', 'strobe.pulseWidth', 'strobe-pulse-val', ' ms');
-        document.getElementById('strobe-color').oninput = (e) => { this.config.strobe.color = e.target.value; document.getElementById('strobe-hex').value = e.target.value.toUpperCase(); };
-        document.getElementById('laser-active').onchange = (e) => this.config.laser.active = e.target.checked;
-        document.querySelectorAll('.laser-btn').forEach(btn => {
-            btn.onclick = () => {
-                document.querySelectorAll('.laser-btn').forEach(b => b.classList.remove('bg-primary', 'text-white'));
-                btn.classList.add('bg-primary', 'text-white'); this.config.laser.preset = btn.dataset.preset;
-            };
-        });
-        bind('laser-count', 'laser.count', 'laser-count-val');
-        bind('laser-thickness', 'laser.thickness', 'laser-thick-val', 'px');
-        bind('laser-speed', 'laser.speed', 'laser-speed-val', '%', true);
-        document.getElementById('laser-color').oninput = (e) => { this.config.laser.color = e.target.value; document.getElementById('laser-color-preview').style.backgroundColor = e.target.value; };
-        bind('fog-density', 'fog', null); bind('bloom-threshold', 'bloom.threshold', null);
-        bind('bloom-radius', 'bloom.radius', null); bind('bloom-intensity', 'bloom.intensity', null);
-        document.getElementById('fs-toggle').onchange = (e) => { if (e.target.checked) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); };
-        document.getElementById('reset-btn').onclick = () => location.reload();
-
-        const addToPlaylist = (el, type, name) => {
-            this.config.playlist.items.push({ el, type, name });
-            this.updatePlaylistUI();
-            if (!this.bgImage && !this.bgVideo) {
-                this.switchToPlaylistItem(this.config.playlist.items.length - 1);
-            }
-        };
-
-        document.getElementById('bg-upload').onchange = (e) => {
-            const file = e.target.files[0]; if (file) {
-                const img = new Image(); img.onload = () => { addToPlaylist(img, 'img', file.name); }; img.src = URL.createObjectURL(file);
-            }
-        };
-        document.getElementById('video-upload').onchange = (e) => {
-            const file = e.target.files[0]; if (file) {
-                const vid = document.createElement('video');
-                vid.style.position = 'fixed'; vid.style.pointerEvents = 'none'; vid.style.opacity = '0';
-                document.body.appendChild(vid);
-                vid.src = URL.createObjectURL(file); vid.loop = true; vid.muted = true; vid.oncanplay = () => { vid.play(); addToPlaylist(vid, 'video', file.name); };
-            }
-        };
-        document.getElementById('playlist-next').onclick = () => {
-            if (this.config.playlist.items.length === 0) return;
-            this.config.playlist.index = (this.config.playlist.index + 1) % this.config.playlist.items.length;
-            const item = this.config.playlist.items[this.config.playlist.index];
-            if (item.type === 'video') { this.bgVideo = item.el; this.bgImage = null; } else { this.bgImage = item.el; this.bgVideo = null; }
-            this.config.playlist.lastSwitch = Date.now();
-        };
-        document.getElementById('playlist-prev').onclick = () => {
-            if (this.config.playlist.items.length === 0) return;
-            this.config.playlist.index = (this.config.playlist.index - 1 + this.config.playlist.items.length) % this.config.playlist.items.length;
-            const item = this.config.playlist.items[this.config.playlist.index];
-            if (item.type === 'video') { this.bgVideo = item.el; this.bgImage = null; } else { this.bgImage = item.el; this.bgVideo = null; }
-            this.config.playlist.lastSwitch = Date.now();
-        };
-        document.getElementById('playlist-clear').onclick = () => { this.config.playlist.items = []; document.getElementById('playlist-list').innerHTML = ''; this.bgImage = null; this.bgVideo = null; };
-        document.getElementById('logo-upload').onchange = (e) => { const file = e.target.files[0]; if (file) { const img = new Image(); img.onload = () => this.logoImage = img; img.src = URL.createObjectURL(file); } };
-    }
+      `}} />
+    </div>
+  );
 }
-window.onload = () => { window.app = new VisualizerApp(); };
-</script>
-</body>
-</html>
