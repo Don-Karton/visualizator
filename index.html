@@ -1,698 +1,717 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Settings, Play, Pause, SkipForward, Maximize, X, 
-  Upload, Trash2, Plus, Monitor, Image as ImageIcon, 
-  QrCode, Zap, AlertCircle
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Экран управления медиа</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script>window.react = React;</script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide React Icons -->
+    <script src="https://unpkg.com/lucide-react"></script>
+    <!-- QR Code Styling Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
 
-// --- Компонент для рендера QR-кода ---
-const QRCodeCustom = ({ data, dotType, padding, bgRadius }) => {
-  const qrRef = useRef(null);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  useEffect(() => {
-    // Динамическая загрузка библиотеки для красивых QR-кодов (скругленные точки)
-    if (!window.QRCodeStyling) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js';
-      script.onload = () => setIsLoaded(true);
-      document.body.appendChild(script);
-    } else {
-      setIsLoaded(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isLoaded && qrRef.current) {
-      qrRef.current.innerHTML = '';
-      const qrCode = new window.QRCodeStyling({
-        width: 300,
-        height: 300,
-        data: data,
-        margin: 0,
-        qrOptions: { typeNumber: 0, mode: "Byte", errorCorrectionLevel: "Q" },
-        dotsOptions: { type: dotType, color: "#000000" },
-        backgroundOptions: { color: "transparent" },
-        cornersSquareOptions: { type: dotType === 'rounded' || dotType === 'classy' ? 'extra-rounded' : 'square', color: "#000000" },
-        cornersDotOptions: { type: dotType === 'rounded' || dotType === 'classy' ? 'dot' : 'square', color: "#000000" }
-      });
-      qrCode.append(qrRef.current);
-    }
-  }, [isLoaded, data, dotType]);
-
-  return (
-    <div 
-      style={{ 
-        padding: `${padding}px`, 
-        borderRadius: `${bgRadius}px`, 
-        backgroundColor: '#ffffff',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-      }}
-    >
-      <div ref={qrRef} />
-    </div>
-  );
-};
-
-export default function App() {
-  // --- Состояния приложения ---
-  const [settingsOpen, setSettingsOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState('media');
-  
-  // Медиа
-  const [mediaQueue, setMediaQueue] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [imageDuration, setImageDuration] = useState(5); // в секундах
-  const [isPlaying, setIsPlaying] = useState(true);
-  
-  // Оверлеи (активные горячие клавиши)
-  const [activeOverlays, setActiveOverlays] = useState({});
-  
-  // Логотип (Z)
-  const [logoSettings, setLogoSettings] = useState({
-    url: null,
-    size: 30, // %
-    opacity: 100 // %
-  });
-
-  // Стробоскоп
-  const [strobe, setStrobe] = useState({
-    enabled: false,
-    intensity: 0.8,
-    speed: 100, // ms
-    randomness: 0.5 // 0 to 1
-  });
-  const strobeRef = useRef(null);
-
-  // QR Пресеты
-  const [qrPresets, setQrPresets] = useState([
-    { 
-      id: 'default-a', 
-      key: 'a', 
-      name: 'Меню заведения (A)', 
-      type: 'url', 
-      url: 'https://example.com/menu',
-      wifiSsid: '',
-      wifiPass: '',
-      bgRadius: 24, 
-      padding: 24, 
-      dotType: 'rounded' 
-    }
-  ]);
-
-  const fileInputRef = useRef(null);
-  const logoInputRef = useRef(null);
-
-  // --- Логика воспроизведения медиа ---
-  const nextMedia = useCallback(() => {
-    if (mediaQueue.length > 0) {
-      setCurrentIndex((prev) => (prev + 1) % mediaQueue.length);
-    }
-  }, [mediaQueue.length]);
-
-  useEffect(() => {
-    if (mediaQueue.length === 0 || !isPlaying) return;
-    
-    const currentMedia = mediaQueue[currentIndex];
-    // Если текущий файл - изображение, запускаем таймер
-    if (currentMedia && currentMedia.type.startsWith('image/')) {
-      const timer = setTimeout(nextMedia, imageDuration * 1000);
-      return () => clearTimeout(timer);
-    }
-    // Для видео переход происходит по событию onEnded на самом элементе
-  }, [currentIndex, mediaQueue, imageDuration, isPlaying, nextMedia]);
-
-  // --- Эффект Стробоскопа ---
-  useEffect(() => {
-    if (!strobe.enabled) {
-      if (strobeRef.current) strobeRef.current.style.opacity = '0';
-      return;
-    }
-    
-    let timeoutId;
-    const loop = () => {
-      // Вероятность вспышки зависит от randomness (чем выше, тем хаотичнее пропуски)
-      const shouldFlash = Math.random() > strobe.randomness * 0.8; 
-      
-      if (shouldFlash && strobeRef.current) {
-        strobeRef.current.style.opacity = strobe.intensity;
-        // Длительность самой вспышки (короткая)
-        setTimeout(() => {
-          if (strobeRef.current) strobeRef.current.style.opacity = '0';
-        }, 30);
-      }
-      
-      timeoutId = setTimeout(loop, strobe.speed);
-    };
-    
-    loop();
-    return () => clearTimeout(timeoutId);
-  }, [strobe]);
-
-  // --- Горячие клавиши ---
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Игнорируем ввод в текстовые поля
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
-
-      const key = e.key.toLowerCase();
-      
-      if (key === 'q') {
-        setSettingsOpen(prev => !prev);
-      } else if (key === 'z') {
-        setActiveOverlays(prev => ({ ...prev, 'z': !prev['z'] }));
-      } else {
-        // Проверка QR пресетов
-        const preset = qrPresets.find(p => p.key === key);
-        if (preset) {
-          setActiveOverlays(prev => ({ ...prev, [key]: !prev[key] }));
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [qrPresets]);
-
-  // --- Обработчики загрузки файлов ---
-  const handleMediaUpload = (e) => {
-    const files = Array.from(e.target.files);
-    const newMedia = files.map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      file,
-      url: URL.createObjectURL(file),
-      type: file.type,
-      name: file.name
-    }));
-    setMediaQueue(prev => [...prev, ...newMedia]);
-  };
-
-  const removeMedia = (id) => {
-    setMediaQueue(prev => {
-      const filtered = prev.filter(m => m.id !== id);
-      if (currentIndex >= filtered.length) setCurrentIndex(Math.max(0, filtered.length - 1));
-      return filtered;
-    });
-  };
-
-  const handleLogoUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setLogoSettings(prev => ({ ...prev, url: URL.createObjectURL(file) }));
-    }
-  };
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(err => console.log(err));
-    } else {
-      document.exitFullscreen();
-    }
-  };
-
-  // --- Генерация данных для QR ---
-  const getQrData = (preset) => {
-    if (preset.type === 'wifi') {
-      return `WIFI:T:WPA;S:${preset.wifiSsid};P:${preset.wifiPass};;`;
-    }
-    return preset.url || 'https://example.com';
-  };
-
-  const updatePreset = (id, field, value) => {
-    setQrPresets(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
-  };
-
-  // --- Рендер ---
-  const isAnyOverlayActive = Object.values(activeOverlays).some(Boolean);
-
-  return (
-    <div className="relative w-screen h-screen bg-black overflow-hidden font-sans select-none">
-      
-      {/* 1. Главный экран (Холст) */}
-      <div 
-        className="absolute inset-0 z-0 flex items-center justify-center cursor-pointer"
-        onClick={(e) => {
-          if (e.target === e.currentTarget || e.target.tagName === 'VIDEO' || e.target.tagName === 'IMG') {
-            setSettingsOpen(!settingsOpen);
-          }
-        }}
-      >
-        {mediaQueue.length > 0 ? (
-          mediaQueue[currentIndex]?.type.startsWith('video/') ? (
-            <video
-              key={mediaQueue[currentIndex].id}
-              src={mediaQueue[currentIndex].url}
-              autoPlay
-              muted
-              className="w-full h-full object-contain pointer-events-none"
-              onEnded={nextMedia}
-            />
-          ) : (
-            <img
-              key={mediaQueue[currentIndex].id}
-              src={mediaQueue[currentIndex].url}
-              className="w-full h-full object-contain pointer-events-none transition-opacity duration-500"
-              alt="media"
-            />
-          )
-        ) : (
-          <div className="text-gray-600 flex flex-col items-center">
-            <Monitor size={64} className="mb-4 opacity-50" />
-            <p className="text-xl">Холст пуст</p>
-            <p className="text-sm mt-2">Кликните или нажмите 'Q' для настройки</p>
-          </div>
-        )}
-      </div>
-
-      {/* 2. Стробоскоп (Эффект поверх контента) */}
-      <div 
-        ref={strobeRef}
-        className="absolute inset-0 z-10 bg-white pointer-events-none mix-blend-color-dodge transition-opacity duration-75"
-        style={{ opacity: 0 }}
-      />
-
-      {/* 3. Размытие фона при активных оверлеях */}
-      <div 
-        className={`absolute inset-0 z-20 bg-black/40 backdrop-blur-md pointer-events-none transition-opacity duration-500 ${isAnyOverlayActive ? 'opacity-100' : 'opacity-0'}`} 
-      />
-
-      {/* 4. Оверлеи (Логотип, QR-коды) */}
-      <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center">
-        {/* Логотип */}
-        {activeOverlays['z'] && logoSettings.url && (
-          <img 
-            src={logoSettings.url} 
-            className="absolute transition-all duration-300"
-            style={{ 
-              width: `${logoSettings.size}%`, 
-              opacity: logoSettings.opacity / 100,
-              filter: 'drop-shadow(0 20px 30px rgba(0,0,0,0.5))'
-            }} 
-            alt="Logo Overlay" 
-          />
-        )}
-        
-        {/* QR Коды */}
-        {qrPresets.map(preset => (
-          activeOverlays[preset.key] && (
-            <div key={preset.id} className="absolute transition-all duration-500 animate-in zoom-in-95 fade-in">
-              <QRCodeCustom 
-                data={getQrData(preset)} 
-                dotType={preset.dotType} 
-                padding={preset.padding} 
-                bgRadius={preset.bgRadius} 
-              />
-              <p className="text-center text-white mt-6 font-medium text-xl tracking-wider uppercase drop-shadow-md">
-                {preset.name}
-              </p>
-            </div>
-          )
-        ))}
-      </div>
-
-      {/* 5. Панель настроек */}
-      <div 
-        className={`absolute top-0 right-0 h-full w-[450px] bg-zinc-900/95 backdrop-blur-xl border-l border-white/10 z-50 transition-transform duration-300 shadow-2xl flex flex-col ${settingsOpen ? 'translate-x-0' : 'translate-x-full'}`}
-      >
-        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/20">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Settings className="text-blue-400" /> Настройки экрана
-          </h2>
-          <div className="flex gap-2">
-            <button onClick={toggleFullscreen} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition" title="Во весь экран">
-              <Maximize size={20} />
-            </button>
-            <button onClick={() => setSettingsOpen(false)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition" title="Закрыть (Q)">
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-
-        {/* Навигация по вкладкам */}
-        <div className="flex px-6 pt-4 gap-4 border-b border-white/5 overflow-x-auto custom-scrollbar">
-          {[
-            { id: 'media', icon: ImageIcon, label: 'Медиа' },
-            { id: 'qr', icon: QrCode, label: 'QR-коды' },
-            { id: 'logo', icon: ImageIcon, label: 'Лого (Z)' },
-            { id: 'strobe', icon: Zap, label: 'Эффекты' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`pb-3 flex items-center gap-2 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeTab === tab.id ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}`}
-            >
-              <tab.icon size={16} /> {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Содержимое вкладок */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 text-gray-300 custom-scrollbar">
-          
-          {/* Вкладка: Медиа */}
-          {activeTab === 'media' && (
-            <div className="space-y-6 animate-in fade-in">
-              <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                <label className="text-sm font-medium text-white mb-2 block">Длительность фото: {imageDuration} сек</label>
-                <input 
-                  type="range" min="2" max="60" value={imageDuration} 
-                  onChange={(e) => setImageDuration(Number(e.target.value))}
-                  className="w-full accent-blue-500"
-                />
-              </div>
-
-              <div>
-                <input 
-                  type="file" multiple accept="image/*,video/*" className="hidden" 
-                  ref={fileInputRef} onChange={handleMediaUpload}
-                  onClick={(e) => e.target.value = null}
-                />
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition"
-                >
-                  <Upload size={18} /> Добавить медиафайлы
-                </button>
-              </div>
-
-              {mediaQueue.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-sm mb-3">
-                    <span className="text-gray-400">Очередь воспроизведения ({mediaQueue.length})</span>
-                    <div className="flex gap-2">
-                      <button onClick={() => setIsPlaying(!isPlaying)} className="p-1 hover:bg-white/10 rounded text-white">
-                        {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-                      </button>
-                      <button onClick={nextMedia} className="p-1 hover:bg-white/10 rounded text-white">
-                        <SkipForward size={16} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                    {mediaQueue.map((item, idx) => (
-                      <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg bg-black/40 border ${idx === currentIndex ? 'border-blue-500/50' : 'border-transparent'}`}>
-                        <div className="flex items-center gap-3 overflow-hidden">
-                          <div className="w-12 h-12 bg-zinc-800 rounded flex-shrink-0 overflow-hidden">
-                            {item.type.startsWith('video/') ? (
-                              <video src={item.url} className="w-full h-full object-cover opacity-70" />
-                            ) : (
-                              <img src={item.url} className="w-full h-full object-cover" alt="" />
-                            )}
-                          </div>
-                          <p className="text-sm truncate w-32">{item.name}</p>
-                        </div>
-                        <button onClick={() => removeMedia(item.id)} className="p-2 text-red-400 hover:bg-red-400/20 rounded-md transition">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Вкладка: QR-коды */}
-          {activeTab === 'qr' && (
-            <div className="space-y-6 animate-in fade-in">
-              <p className="text-sm text-gray-400">
-                Настройте быстрые клавиши для вывода QR-кодов поверх экрана.
-              </p>
-              
-              {qrPresets.map((preset, index) => (
-                <div key={preset.id} className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4 relative">
-                  {index > 0 && (
-                    <button 
-                      onClick={() => setQrPresets(prev => prev.filter(p => p.id !== preset.id))}
-                      className="absolute top-3 right-3 text-gray-500 hover:text-red-400"
-                    >
-                      <X size={16} />
-                    </button>
-                  )}
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Название / Текст</label>
-                      <input 
-                        type="text" value={preset.name} 
-                        onChange={(e) => updatePreset(preset.id, 'name', e.target.value)}
-                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" 
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Клавиша запуска</label>
-                      <input 
-                        type="text" maxLength="1" value={preset.key.toUpperCase()} 
-                        onChange={(e) => updatePreset(preset.id, 'key', e.target.value.toLowerCase())}
-                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 text-center" 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 p-1 bg-black/50 rounded-lg">
-                    <button 
-                      onClick={() => updatePreset(preset.id, 'type', 'url')}
-                      className={`flex-1 py-1 text-sm rounded-md transition ${preset.type === 'url' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                    >
-                      Ссылка
-                    </button>
-                    <button 
-                      onClick={() => updatePreset(preset.id, 'type', 'wifi')}
-                      className={`flex-1 py-1 text-sm rounded-md transition ${preset.type === 'wifi' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                    >
-                      Wi-Fi
-                    </button>
-                  </div>
-
-                  {preset.type === 'url' ? (
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">URL ссылка</label>
-                      <input 
-                        type="text" value={preset.url} 
-                        onChange={(e) => updatePreset(preset.id, 'url', e.target.value)}
-                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" 
-                      />
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Имя сети (SSID)</label>
-                        <input 
-                          type="text" value={preset.wifiSsid} 
-                          onChange={(e) => updatePreset(preset.id, 'wifiSsid', e.target.value)}
-                          className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" 
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Пароль</label>
-                        <input 
-                          type="text" value={preset.wifiPass} 
-                          onChange={(e) => updatePreset(preset.id, 'wifiPass', e.target.value)}
-                          className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" 
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="pt-3 border-t border-white/5 space-y-4">
-                    <p className="text-xs font-medium text-white">Внешний вид</p>
-                    
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Стиль точек кода</label>
-                      <select 
-                        value={preset.dotType}
-                        onChange={(e) => updatePreset(preset.id, 'dotType', e.target.value)}
-                        className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                      >
-                        <option value="square">Квадратные</option>
-                        <option value="dots">Точки</option>
-                        <option value="rounded">Скругленные</option>
-                        <option value="classy">Классические (мягкие)</option>
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Размер полей: {preset.padding}px</label>
-                        <input 
-                          type="range" min="0" max="64" value={preset.padding} 
-                          onChange={(e) => updatePreset(preset.id, 'padding', Number(e.target.value))}
-                          className="w-full accent-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Скругление фона: {preset.bgRadius}px</label>
-                        <input 
-                          type="range" min="0" max="64" value={preset.bgRadius} 
-                          onChange={(e) => updatePreset(preset.id, 'bgRadius', Number(e.target.value))}
-                          className="w-full accent-blue-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <button 
-                onClick={() => setQrPresets(prev => [...prev, { id: Math.random().toString(), key: '', name: 'Новый код', type: 'url', url: '', wifiSsid: '', wifiPass: '', bgRadius: 16, padding: 16, dotType: 'square' }])}
-                className="w-full py-3 border border-dashed border-white/20 hover:border-blue-500 hover:text-blue-400 rounded-xl font-medium flex items-center justify-center gap-2 transition"
-              >
-                <Plus size={18} /> Добавить пресет
-              </button>
-            </div>
-          )}
-
-          {/* Вкладка: Логотип */}
-          {activeTab === 'logo' && (
-            <div className="space-y-6 animate-in fade-in">
-              <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-start gap-4">
-                <AlertCircle className="text-blue-400 flex-shrink-0 mt-0.5" size={20} />
-                <p className="text-sm text-gray-300">
-                  Логотип будет появляться поверх транслируемого контента при нажатии клавиши <kbd className="bg-black/50 px-2 py-0.5 rounded border border-white/20 text-white mx-1">Z</kbd>. Задний план будет слегка размыт.
-                </p>
-              </div>
-
-              <div>
-                <input 
-                  type="file" accept="image/*" className="hidden" 
-                  ref={logoInputRef} onChange={handleLogoUpload}
-                />
-                <button 
-                  onClick={() => logoInputRef.current?.click()}
-                  className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition border border-white/5"
-                >
-                  <Upload size={18} /> Загрузить PNG логотип
-                </button>
-              </div>
-
-              {logoSettings.url && (
-                <div className="space-y-6 bg-black/20 p-4 rounded-xl border border-white/5 mt-4">
-                  <div className="h-40 bg-zinc-900 rounded-lg flex items-center justify-center overflow-hidden relative checkerboard-bg">
-                    <img 
-                      src={logoSettings.url} 
-                      style={{ width: `${logoSettings.size}%`, opacity: logoSettings.opacity / 100 }} 
-                      alt="Logo preview" 
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-white mb-2 flex justify-between">
-                      <span>Размер на экране</span>
-                      <span className="text-blue-400">{logoSettings.size}%</span>
-                    </label>
-                    <input 
-                      type="range" min="5" max="100" value={logoSettings.size} 
-                      onChange={(e) => setLogoSettings(prev => ({ ...prev, size: Number(e.target.value) }))}
-                      className="w-full accent-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-white mb-2 flex justify-between">
-                      <span>Непрозрачность</span>
-                      <span className="text-blue-400">{logoSettings.opacity}%</span>
-                    </label>
-                    <input 
-                      type="range" min="10" max="100" value={logoSettings.opacity} 
-                      onChange={(e) => setLogoSettings(prev => ({ ...prev, opacity: Number(e.target.value) }))}
-                      className="w-full accent-blue-500"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Вкладка: Стробоскоп */}
-          {activeTab === 'strobe' && (
-            <div className="space-y-6 animate-in fade-in">
-              <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 p-5 rounded-xl border border-blue-500/20">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-white font-bold flex items-center gap-2">
-                    <Zap size={18} className="text-yellow-400" /> Стробоскоп
-                  </h3>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={strobe.enabled}
-                      onChange={(e) => setStrobe(prev => ({ ...prev, enabled: e.target.checked }))}
-                    />
-                    <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  </label>
-                </div>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Эффект высвечивания белых и светлых элементов фона. Отлично работает поверх контрастных изображений и видео.
-                </p>
-              </div>
-
-              <div className={`space-y-6 ${strobe.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none transition-opacity'}`}>
-                <div>
-                  <label className="text-sm font-medium text-white mb-2 flex justify-between">
-                    <span>Интенсивность</span>
-                    <span>{Math.round(strobe.intensity * 100)}%</span>
-                  </label>
-                  <input 
-                    type="range" min="0.1" max="1" step="0.05" value={strobe.intensity} 
-                    onChange={(e) => setStrobe(prev => ({ ...prev, intensity: Number(e.target.value) }))}
-                    className="w-full accent-yellow-400"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Яркость вспышки</p>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-white mb-2 flex justify-between">
-                    <span>Скорость (интервал)</span>
-                    <span>{strobe.speed} мс</span>
-                  </label>
-                  <input 
-                    type="range" min="30" max="1000" step="10" value={strobe.speed} 
-                    onChange={(e) => setStrobe(prev => ({ ...prev, speed: Number(e.target.value) }))}
-                    className="w-full accent-yellow-400"
-                    style={{ direction: 'rtl' }} // Меньше мс = быстрее, инвертируем для логики
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>Быстро</span>
-                    <span>Медленно</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-white mb-2 flex justify-between">
-                    <span>Хаотичность мерцания</span>
-                    <span>{Math.round(strobe.randomness * 100)}%</span>
-                  </label>
-                  <input 
-                    type="range" min="0" max="0.9" step="0.1" value={strobe.randomness} 
-                    onChange={(e) => setStrobe(prev => ({ ...prev, randomness: Number(e.target.value) }))}
-                    className="w-full accent-yellow-400"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>Ритмично</span>
-                    <span>Рвано</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-        </div>
-      </div>
-
-      <style dangerouslySetInnerHTML={{__html: `
+    <style>
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
         .checkerboard-bg {
-          background-image: linear-gradient(45deg, #18181b 25%, transparent 25%), 
-                            linear-gradient(-45deg, #18181b 25%, transparent 25%), 
-                            linear-gradient(45deg, transparent 75%, #18181b 75%), 
+          background-image: linear-gradient(45deg, #18181b 25%, transparent 25%),
+                            linear-gradient(-45deg, #18181b 25%, transparent 25%),
+                            linear-gradient(45deg, transparent 75%, #18181b 75%),
                             linear-gradient(-45deg, transparent 75%, #18181b 75%);
           background-size: 20px 20px;
           background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         }
-      `}} />
-    </div>
-  );
-}
+        kbd {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+    </style>
+</head>
+<body class="bg-black text-white">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+        const {
+          Settings, Play, Pause, SkipForward, Maximize, X,
+          Upload, Trash2, Plus, Monitor, Image: ImageIcon,
+          QrCode, Zap, AlertCircle
+        } = LucideReact;
+
+        // --- Компонент для рендера QR-кода ---
+        const QRCodeCustom = ({ data, dotType, padding, bgRadius }) => {
+          const qrRef = useRef(null);
+
+          useEffect(() => {
+            if (qrRef.current) {
+              qrRef.current.innerHTML = '';
+              const qrCode = new window.QRCodeStyling({
+                width: 300,
+                height: 300,
+                data: data,
+                margin: 0,
+                qrOptions: { typeNumber: 0, mode: "Byte", errorCorrectionLevel: "Q" },
+                dotsOptions: { type: dotType, color: "#000000" },
+                backgroundOptions: { color: "transparent" },
+                cornersSquareOptions: { type: dotType === 'rounded' || dotType === 'classy' ? 'extra-rounded' : 'square', color: "#000000" },
+                cornersDotOptions: { type: dotType === 'rounded' || dotType === 'classy' ? 'dot' : 'square', color: "#000000" }
+              });
+              qrCode.append(qrRef.current);
+            }
+          }, [data, dotType]);
+
+          return (
+            <div
+              style={{
+                padding: `${padding}px`,
+                borderRadius: `${bgRadius}px`,
+                backgroundColor: '#ffffff',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+              }}
+            >
+              <div ref={qrRef} />
+            </div>
+          );
+        };
+
+        function App() {
+          // --- Состояния приложения ---
+          const [settingsOpen, setSettingsOpen] = useState(true);
+          const [activeTab, setActiveTab] = useState('media');
+
+          // Медиа
+          const [mediaQueue, setMediaQueue] = useState([]);
+          const [currentIndex, setCurrentIndex] = useState(0);
+          const [imageDuration, setImageDuration] = useState(5); // в секундах
+          const [isPlaying, setIsPlaying] = useState(true);
+
+          // Оверлеи (активные горячие клавиши)
+          const [activeOverlays, setActiveOverlays] = useState({});
+
+          // Логотип (Z)
+          const [logoSettings, setLogoSettings] = useState({
+            url: null,
+            size: 30, // %
+            opacity: 100 // %
+          });
+
+          // Стробоскоп
+          const [strobe, setStrobe] = useState({
+            enabled: false,
+            intensity: 0.8,
+            speed: 100, // ms
+            randomness: 0.5 // 0 to 1
+          });
+          const strobeRef = useRef(null);
+
+          // QR Пресеты
+          const [qrPresets, setQrPresets] = useState([
+            {
+              id: 'default-a',
+              key: 'a',
+              name: 'Меню заведения (A)',
+              type: 'url',
+              url: 'https://example.com/menu',
+              wifiSsid: '',
+              wifiPass: '',
+              bgRadius: 24,
+              padding: 24,
+              dotType: 'rounded'
+            }
+          ]);
+
+          const fileInputRef = useRef(null);
+          const logoInputRef = useRef(null);
+
+          // --- Логика воспроизведения медиа ---
+          const nextMedia = useCallback(() => {
+            if (mediaQueue.length > 0) {
+              setCurrentIndex((prev) => (prev + 1) % mediaQueue.length);
+            }
+          }, [mediaQueue.length]);
+
+          useEffect(() => {
+            if (mediaQueue.length === 0 || !isPlaying) return;
+
+            const currentMedia = mediaQueue[currentIndex];
+            // Если текущий файл - изображение, запускаем таймер
+            if (currentMedia && currentMedia.type.startsWith('image/')) {
+              const timer = setTimeout(nextMedia, imageDuration * 1000);
+              return () => clearTimeout(timer);
+            }
+            // Для видео переход происходит по событию onEnded на самом элементе
+          }, [currentIndex, mediaQueue, imageDuration, isPlaying, nextMedia]);
+
+          // --- Эффект Стробоскопа ---
+          useEffect(() => {
+            if (!strobe.enabled) {
+              if (strobeRef.current) strobeRef.current.style.opacity = '0';
+              return;
+            }
+
+            let timeoutId;
+            const loop = () => {
+              // Вероятность вспышки зависит от randomness (чем выше, тем хаотичнее пропуски)
+              const shouldFlash = Math.random() > strobe.randomness * 0.8;
+
+              if (shouldFlash && strobeRef.current) {
+                strobeRef.current.style.opacity = strobe.intensity;
+                // Длительность самой вспышки (короткая)
+                setTimeout(() => {
+                  if (strobeRef.current) strobeRef.current.style.opacity = '0';
+                }, 30);
+              }
+
+              timeoutId = setTimeout(loop, strobe.speed);
+            };
+
+            loop();
+            return () => clearTimeout(timeoutId);
+          }, [strobe]);
+
+          // --- Горячие клавиши ---
+          useEffect(() => {
+            const handleKeyDown = (e) => {
+              // Игнорируем ввод в текстовые поля
+              if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+
+              const key = e.key.toLowerCase();
+
+              if (key === 'q') {
+                setSettingsOpen(prev => !prev);
+              } else if (key === 'z') {
+                setActiveOverlays(prev => ({ ...prev, 'z': !prev['z'] }));
+              } else {
+                // Проверка QR пресетов
+                const preset = qrPresets.find(p => p.key === key);
+                if (preset) {
+                  setActiveOverlays(prev => ({ ...prev, [key]: !prev[key] }));
+                }
+              }
+            };
+
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+          }, [qrPresets]);
+
+          // --- Обработчики загрузки файлов ---
+          const handleMediaUpload = (e) => {
+            const files = Array.from(e.target.files);
+            const newMedia = files.map(file => ({
+              id: Math.random().toString(36).substr(2, 9),
+              file,
+              url: URL.createObjectURL(file),
+              type: file.type,
+              name: file.name
+            }));
+            setMediaQueue(prev => [...prev, ...newMedia]);
+          };
+
+          const removeMedia = (id) => {
+            setMediaQueue(prev => {
+              const filtered = prev.filter(m => m.id !== id);
+              if (currentIndex >= filtered.length) setCurrentIndex(Math.max(0, filtered.length - 1));
+              return filtered;
+            });
+          };
+
+          const handleLogoUpload = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              setLogoSettings(prev => ({ ...prev, url: URL.createObjectURL(file) }));
+            }
+          };
+
+          const toggleFullscreen = () => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch(err => console.log(err));
+            } else {
+              document.exitFullscreen();
+            }
+          };
+
+          // --- Генерация данных для QR ---
+          const getQrData = (preset) => {
+            if (preset.type === 'wifi') {
+              return `WIFI:T:WPA;S:${preset.wifiSsid};P:${preset.wifiPass};;`;
+            }
+            return preset.url || 'https://example.com';
+          };
+
+          const updatePreset = (id, field, value) => {
+            setQrPresets(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+          };
+
+          // --- Рендер ---
+          const isAnyOverlayActive = Object.values(activeOverlays).some(Boolean);
+
+          return (
+            <div className="relative w-screen h-screen bg-black overflow-hidden font-sans select-none text-gray-300">
+
+              {/* 1. Главный экран (Холст) */}
+              <div
+                className="absolute inset-0 z-0 flex items-center justify-center cursor-pointer"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget || e.target.tagName === 'VIDEO' || e.target.tagName === 'IMG') {
+                    setSettingsOpen(!settingsOpen);
+                  }
+                }}
+              >
+                {mediaQueue.length > 0 ? (
+                  mediaQueue[currentIndex]?.type.startsWith('video/') ? (
+                    <video
+                      key={mediaQueue[currentIndex].id}
+                      src={mediaQueue[currentIndex].url}
+                      autoPlay
+                      muted
+                      className="w-full h-full object-contain pointer-events-none"
+                      onEnded={nextMedia}
+                    />
+                  ) : (
+                    <img
+                      key={mediaQueue[currentIndex].id}
+                      src={mediaQueue[currentIndex].url}
+                      className="w-full h-full object-contain pointer-events-none transition-opacity duration-500"
+                      alt="media"
+                    />
+                  )
+                ) : (
+                  <div className="text-gray-600 flex flex-col items-center">
+                    <Monitor size={64} className="mb-4 opacity-50" />
+                    <p className="text-xl">Холст пуст</p>
+                    <p className="text-sm mt-2">Кликните или нажмите 'Q' для настройки</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Стробоскоп (Эффект поверх контента) */}
+              <div
+                ref={strobeRef}
+                className="absolute inset-0 z-10 bg-white pointer-events-none mix-blend-color-dodge transition-opacity duration-75"
+                style={{ opacity: 0 }}
+              />
+
+              {/* 3. Размытие фона при активных оверлеях */}
+              <div
+                className={`absolute inset-0 z-20 bg-black/40 backdrop-blur-md pointer-events-none transition-opacity duration-500 ${isAnyOverlayActive ? 'opacity-100' : 'opacity-0'}`}
+              />
+
+              {/* 4. Оверлеи (Логотип, QR-коды) */}
+              <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center">
+                {/* Логотип */}
+                {activeOverlays['z'] && logoSettings.url && (
+                  <img
+                    src={logoSettings.url}
+                    className="absolute transition-all duration-300"
+                    style={{
+                      width: `${logoSettings.size}%`,
+                      opacity: logoSettings.opacity / 100,
+                      filter: 'drop-shadow(0 20px 30px rgba(0,0,0,0.5))'
+                    }}
+                    alt="Logo Overlay"
+                  />
+                )}
+
+                {/* QR Коды */}
+                {qrPresets.map(preset => (
+                  activeOverlays[preset.key] && (
+                    <div key={preset.id} className="absolute transition-all duration-500 animate-in zoom-in-95 fade-in">
+                      <QRCodeCustom
+                        data={getQrData(preset)}
+                        dotType={preset.dotType}
+                        padding={preset.padding}
+                        bgRadius={preset.bgRadius}
+                      />
+                      <p className="text-center text-white mt-6 font-medium text-xl tracking-wider uppercase drop-shadow-md">
+                        {preset.name}
+                      </p>
+                    </div>
+                  )
+                ))}
+              </div>
+
+              {/* 5. Панель настроек */}
+              <div
+                className={`absolute top-0 right-0 h-full w-[450px] bg-zinc-900/95 backdrop-blur-xl border-l border-white/10 z-50 transition-transform duration-300 shadow-2xl flex flex-col ${settingsOpen ? 'translate-x-0' : 'translate-x-full'}`}
+              >
+                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/20">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Settings className="text-blue-400" /> Настройки экрана
+                  </h2>
+                  <div className="flex gap-2">
+                    <button onClick={toggleFullscreen} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition" title="Во весь экран">
+                      <Maximize size={20} />
+                    </button>
+                    <button onClick={() => setSettingsOpen(false)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition" title="Закрыть (Q)">
+                      <X size={20} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Навигация по вкладкам */}
+                <div className="flex px-6 pt-4 gap-4 border-b border-white/5 overflow-x-auto custom-scrollbar">
+                  {[
+                    { id: 'media', icon: ImageIcon, label: 'Медиа' },
+                    { id: 'qr', icon: QrCode, label: 'QR-коды' },
+                    { id: 'logo', icon: ImageIcon, label: 'Лого (Z)' },
+                    { id: 'strobe', icon: Zap, label: 'Эффекты' }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`pb-3 flex items-center gap-2 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeTab === tab.id ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+                    >
+                      <tab.icon size={16} /> {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Содержимое вкладок */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 text-gray-300 custom-scrollbar">
+
+                  {/* Вкладка: Медиа */}
+                  {activeTab === 'media' && (
+                    <div className="space-y-6 animate-in fade-in">
+                      <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                        <label className="text-sm font-medium text-white mb-2 block">Длительность фото: {imageDuration} сек</label>
+                        <input 
+                          type="range" min="2" max="60" value={imageDuration}
+                          onChange={(e) => setImageDuration(Number(e.target.value))}
+                          className="w-full accent-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <input 
+                          type="file" multiple accept="image/*,video/*" className="hidden"
+                          ref={fileInputRef} onChange={handleMediaUpload}
+                          onClick={(e) => e.target.value = null}
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition"
+                        >
+                          <Upload size={18} /> Добавить медиафайлы
+                        </button>
+                      </div>
+
+                      {mediaQueue.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center text-sm mb-3">
+                            <span className="text-gray-400">Очередь воспроизведения ({mediaQueue.length})</span>
+                            <div className="flex gap-2">
+                              <button onClick={() => setIsPlaying(!isPlaying)} className="p-1 hover:bg-white/10 rounded text-white">
+                                {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                              </button>
+                              <button onClick={nextMedia} className="p-1 hover:bg-white/10 rounded text-white">
+                                <SkipForward size={16} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            {mediaQueue.map((item, idx) => (
+                              <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg bg-black/40 border ${idx === currentIndex ? 'border-blue-500/50' : 'border-transparent'}`}>
+                                <div className="flex items-center gap-3 overflow-hidden">
+                                  <div className="w-12 h-12 bg-zinc-800 rounded flex-shrink-0 overflow-hidden">
+                                    {item.type.startsWith('video/') ? (
+                                      <video src={item.url} className="w-full h-full object-cover opacity-70" />
+                                    ) : (
+                                      <img src={item.url} className="w-full h-full object-cover" alt="" />
+                                    )}
+                                  </div>
+                                  <p className="text-sm truncate w-32">{item.name}</p>
+                                </div>
+                                <button onClick={() => removeMedia(item.id)} className="p-2 text-red-400 hover:bg-red-400/20 rounded-md transition">
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Вкладка: QR-коды */}
+                  {activeTab === 'qr' && (
+                    <div className="space-y-6 animate-in fade-in">
+                      <p className="text-sm text-gray-400">
+                        Настройте быстрые клавиши для вывода QR-кодов поверх экрана.
+                      </p>
+
+                      {qrPresets.map((preset, index) => (
+                        <div key={preset.id} className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4 relative">
+                          {index > 0 && (
+                            <button
+                              onClick={() => setQrPresets(prev => prev.filter(p => p.id !== preset.id))}
+                              className="absolute top-3 right-3 text-gray-500 hover:text-red-400"
+                            >
+                              <X size={16} />
+                            </button>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs text-gray-500 mb-1 block">Название / Текст</label>
+                              <input
+                                type="text" value={preset.name}
+                                onChange={(e) => updatePreset(preset.id, 'name', e.target.value)}
+                                className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500 mb-1 block">Клавиша запуска</label>
+                              <input
+                                type="text" maxLength="1" value={preset.key.toUpperCase()}
+                                onChange={(e) => updatePreset(preset.id, 'key', e.target.value.toLowerCase())}
+                                className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 text-center"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 p-1 bg-black/50 rounded-lg">
+                            <button
+                              onClick={() => updatePreset(preset.id, 'type', 'url')}
+                              className={`flex-1 py-1 text-sm rounded-md transition ${preset.type === 'url' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                            >
+                              Ссылка
+                            </button>
+                            <button
+                              onClick={() => updatePreset(preset.id, 'type', 'wifi')}
+                              className={`flex-1 py-1 text-sm rounded-md transition ${preset.type === 'wifi' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                            >
+                              Wi-Fi
+                            </button>
+                          </div>
+
+                          {preset.type === 'url' ? (
+                            <div>
+                              <label className="text-xs text-gray-500 mb-1 block">URL ссылка</label>
+                              <input
+                                type="text" value={preset.url}
+                                onChange={(e) => updatePreset(preset.id, 'url', e.target.value)}
+                                className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-xs text-gray-500 mb-1 block">Имя сети (SSID)</label>
+                                <input
+                                  type="text" value={preset.wifiSsid}
+                                  onChange={(e) => updatePreset(preset.id, 'wifiSsid', e.target.value)}
+                                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 mb-1 block">Пароль</label>
+                                <input
+                                  type="text" value={preset.wifiPass}
+                                  onChange={(e) => updatePreset(preset.id, 'wifiPass', e.target.value)}
+                                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="pt-3 border-t border-white/5 space-y-4">
+                            <p className="text-xs font-medium text-white">Внешний вид</p>
+
+                            <div>
+                              <label className="text-xs text-gray-500 mb-1 block">Стиль точек кода</label>
+                              <select
+                                value={preset.dotType}
+                                onChange={(e) => updatePreset(preset.id, 'dotType', e.target.value)}
+                                className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                              >
+                                <option value="square">Квадратные</option>
+                                <option value="dots">Точки</option>
+                                <option value="rounded">Скругленные</option>
+                                <option value="classy">Классические (мягкие)</option>
+                              </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-gray-500 mb-1 block">Размер полей: {preset.padding}px</label>
+                                <input
+                                  type="range" min="0" max="64" value={preset.padding}
+                                  onChange={(e) => updatePreset(preset.id, 'padding', Number(e.target.value))}
+                                  className="w-full accent-blue-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 mb-1 block">Скругление фона: {preset.bgRadius}px</label>
+                                <input
+                                  type="range" min="0" max="64" value={preset.bgRadius}
+                                  onChange={(e) => updatePreset(preset.id, 'bgRadius', Number(e.target.value))}
+                                  className="w-full accent-blue-500"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={() => setQrPresets(prev => [...prev, { id: Math.random().toString(), key: '', name: 'Новый код', type: 'url', url: '', wifiSsid: '', wifiPass: '', bgRadius: 16, padding: 16, dotType: 'square' }])}
+                        className="w-full py-3 border border-dashed border-white/20 hover:border-blue-500 hover:text-blue-400 rounded-xl font-medium flex items-center justify-center gap-2 transition"
+                      >
+                        <Plus size={18} /> Добавить пресет
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Вкладка: Логотип */}
+                  {activeTab === 'logo' && (
+                    <div className="space-y-6 animate-in fade-in">
+                      <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-start gap-4">
+                        <AlertCircle className="text-blue-400 flex-shrink-0 mt-0.5" size={20} />
+                        <p className="text-sm text-gray-300">
+                          Логотип будет появляться поверх транслируемого контента при нажатии клавиши <kbd className="bg-black/50 px-2 py-0.5 rounded border border-white/20 text-white mx-1">Z</kbd>. Задний план будет слегка размыт.
+                        </p>
+                      </div>
+
+                      <div>
+                        <input 
+                          type="file" accept="image/*" className="hidden"
+                          ref={logoInputRef} onChange={handleLogoUpload}
+                        />
+                        <button
+                          onClick={() => logoInputRef.current?.click()}
+                          className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition border border-white/5"
+                        >
+                          <Upload size={18} /> Загрузить PNG логотип
+                        </button>
+                      </div>
+
+                      {logoSettings.url && (
+                        <div className="space-y-6 bg-black/20 p-4 rounded-xl border border-white/5 mt-4">
+                          <div className="h-40 bg-zinc-900 rounded-lg flex items-center justify-center overflow-hidden relative checkerboard-bg">
+                            <img
+                              src={logoSettings.url}
+                              style={{ width: `${logoSettings.size}%`, opacity: logoSettings.opacity / 100 }}
+                              alt="Logo preview"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-sm font-medium text-white mb-2 flex justify-between">
+                              <span>Размер на экране</span>
+                              <span className="text-blue-400">{logoSettings.size}%</span>
+                            </label>
+                            <input
+                              type="range" min="5" max="100" value={logoSettings.size}
+                              onChange={(e) => setLogoSettings(prev => ({ ...prev, size: Number(e.target.value) }))}
+                              className="w-full accent-blue-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-sm font-medium text-white mb-2 flex justify-between">
+                              <span>Непрозрачность</span>
+                              <span className="text-blue-400">{logoSettings.opacity}%</span>
+                            </label>
+                            <input
+                              type="range" min="10" max="100" value={logoSettings.opacity}
+                              onChange={(e) => setLogoSettings(prev => ({ ...prev, opacity: Number(e.target.value) }))}
+                              className="w-full accent-blue-500"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Вкладка: Стробоскоп */}
+                  {activeTab === 'strobe' && (
+                    <div className="space-y-6 animate-in fade-in">
+                      <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 p-5 rounded-xl border border-blue-500/20">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-white font-bold flex items-center gap-2">
+                            <Zap size={18} className="text-yellow-400" /> Стробоскоп
+                          </h3>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={strobe.enabled}
+                              onChange={(e) => setStrobe(prev => ({ ...prev, enabled: e.target.checked }))}
+                            />
+                            <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+                        <p className="text-xs text-gray-400 leading-relaxed">
+                          Эффект мерцания поверх контента.
+                        </p>
+                      </div>
+
+                      <div className={`space-y-6 ${strobe.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none transition-opacity'}`}>
+                        <div>
+                          <label className="text-sm font-medium text-white mb-2 flex justify-between">
+                            <span>Интенсивность</span>
+                            <span>{Math.round(strobe.intensity * 100)}%</span>
+                          </label>
+                          <input
+                            type="range" min="0.1" max="1" step="0.05" value={strobe.intensity}
+                            onChange={(e) => setStrobe(prev => ({ ...prev, intensity: Number(e.target.value) }))}
+                            className="w-full accent-yellow-400"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Яркость вспышки</p>
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium text-white mb-2 flex justify-between">
+                            <span>Скорость (интервал)</span>
+                            <span>{strobe.speed} мс</span>
+                          </label>
+                          <input
+                            type="range" min="30" max="1000" step="10" value={strobe.speed}
+                            onChange={(e) => setStrobe(prev => ({ ...prev, speed: Number(e.target.value) }))}
+                            className="w-full accent-yellow-400"
+                            style={{ direction: 'rtl' }}
+                          />
+                          <div className="flex justify-between text-xs text-gray-500 mt-1">
+                            <span>Быстро</span>
+                            <span>Медленно</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium text-white mb-2 flex justify-between">
+                            <span>Хаотичность мерцания</span>
+                            <span>{Math.round(strobe.randomness * 100)}%</span>
+                          </label>
+                          <input
+                            type="range" min="0" max="0.9" step="0.1" value={strobe.randomness}
+                            onChange={(e) => setStrobe(prev => ({ ...prev, randomness: Number(e.target.value) }))}
+                            className="w-full accent-yellow-400"
+                          />
+                          <div className="flex justify-between text-xs text-gray-500 mt-1">
+                            <span>Ритмично</span>
+                            <span>Рвано</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
