@@ -43,7 +43,7 @@
         const {
           Settings, Play, Pause, SkipForward, Maximize, X,
           Upload, Trash2, Plus, Monitor, Image: ImageIcon,
-          QrCode, Zap, AlertCircle
+          QrCode, Zap, AlertCircle, Save
         } = LucideReact;
 
         // --- Компонент для рендера QR-кода ---
@@ -66,7 +66,7 @@
               });
               qrCode.append(qrRef.current);
             }
-          }, [data, dotType]);
+          }, [data, dotType, padding, bgRadius]);
 
           return (
             <div
@@ -87,33 +87,43 @@
           const [settingsOpen, setSettingsOpen] = useState(true);
           const [activeTab, setActiveTab] = useState('media');
 
+          // Инициализация из LocalStorage
+          const loadSavedData = (key, defaultValue) => {
+            try {
+              const saved = localStorage.getItem(key);
+              return saved ? JSON.parse(saved) : defaultValue;
+            } catch (e) {
+              return defaultValue;
+            }
+          };
+
           // Медиа
           const [mediaQueue, setMediaQueue] = useState([]);
           const [currentIndex, setCurrentIndex] = useState(0);
-          const [imageDuration, setImageDuration] = useState(5); // в секундах
+          const [imageDuration, setImageDuration] = useState(() => loadSavedData('imageDuration', 5));
           const [isPlaying, setIsPlaying] = useState(true);
 
           // Оверлеи (активные горячие клавиши)
           const [activeOverlays, setActiveOverlays] = useState({});
 
           // Логотип (Z)
-          const [logoSettings, setLogoSettings] = useState({
+          const [logoSettings, setLogoSettings] = useState(() => loadSavedData('logoSettings', {
             url: null,
             size: 30, // %
             opacity: 100 // %
-          });
+          }));
 
           // Стробоскоп
-          const [strobe, setStrobe] = useState({
+          const [strobe, setStrobe] = useState(() => loadSavedData('strobe', {
             enabled: false,
             intensity: 0.8,
             speed: 100, // ms
             randomness: 0.5 // 0 to 1
-          });
+          }));
           const strobeRef = useRef(null);
 
           // QR Пресеты
-          const [qrPresets, setQrPresets] = useState([
+          const [qrPresets, setQrPresets] = useState(() => loadSavedData('qrPresets', [
             {
               id: 'default-a',
               key: 'a',
@@ -126,7 +136,25 @@
               padding: 24,
               dotType: 'rounded'
             }
-          ]);
+          ]));
+
+          // Функция сохранения
+          const saveAllData = () => {
+            localStorage.setItem('qrPresets', JSON.stringify(qrPresets));
+            localStorage.setItem('logoSettings', JSON.stringify(logoSettings));
+            localStorage.setItem('imageDuration', JSON.stringify(imageDuration));
+            localStorage.setItem('strobe', JSON.stringify(strobe));
+
+            // Визуальная индикация на кнопке сохранения
+            const btn = document.getElementById('global-save-btn');
+            if (btn) {
+              const originalContent = btn.innerHTML;
+              btn.innerHTML = '<span style="color: #4ade80;">✓</span>';
+              setTimeout(() => {
+                btn.innerHTML = originalContent;
+              }, 2000);
+            }
+          };
 
           const fileInputRef = useRef(null);
           const logoInputRef = useRef(null);
@@ -180,8 +208,10 @@
           // --- Горячие клавиши ---
           useEffect(() => {
             const handleKeyDown = (e) => {
-              // Игнорируем ввод в текстовые поля
-              if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+              // Игнорируем ввод в текстовые поля, если они в фокусе
+              if (document.activeElement.tagName === 'INPUT' ||
+                  document.activeElement.tagName === 'TEXTAREA' ||
+                  document.activeElement.tagName === 'SELECT') return;
 
               const key = e.key.toLowerCase();
 
@@ -201,6 +231,12 @@
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
           }, [qrPresets]);
+
+          // Переключение логотипа через ПКМ
+          const handleContextMenu = (e) => {
+            e.preventDefault();
+            setActiveOverlays(prev => ({ ...prev, 'z': !prev['z'] }));
+          };
 
           // --- Обработчики загрузки файлов ---
           const handleMediaUpload = (e) => {
@@ -259,6 +295,7 @@
               {/* 1. Главный экран (Холст) */}
               <div
                 className="absolute inset-0 z-0 flex items-center justify-center cursor-pointer"
+                onContextMenu={handleContextMenu}
                 onClick={(e) => {
                   if (e.target === e.currentTarget || e.target.tagName === 'VIDEO' || e.target.tagName === 'IMG') {
                     setSettingsOpen(!settingsOpen);
@@ -347,6 +384,14 @@
                     <Settings className="text-blue-400" /> Настройки экрана
                   </h2>
                   <div className="flex gap-2">
+                    <button
+                      id="global-save-btn"
+                      onClick={saveAllData}
+                      className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition"
+                      title="Сохранить настройки"
+                    >
+                      <Save size={20} />
+                    </button>
                     <button onClick={toggleFullscreen} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition" title="Во весь экран">
                       <Maximize size={20} />
                     </button>
@@ -381,11 +426,12 @@
                   {activeTab === 'media' && (
                     <div className="space-y-6 animate-in fade-in">
                       <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                        <label className="text-sm font-medium text-white mb-2 block">Длительность фото: {imageDuration} сек</label>
+                        <label htmlFor="duration-range" className="text-sm font-medium text-white mb-2 block">Длительность фото: {imageDuration} сек</label>
                         <input 
+                          id="duration-range"
                           type="range" min="2" max="60" value={imageDuration}
                           onChange={(e) => setImageDuration(Number(e.target.value))}
-                          className="w-full accent-blue-500"
+                          className="w-full accent-blue-500 cursor-pointer"
                         />
                       </div>
 
@@ -463,7 +509,9 @@
                               <label className="text-xs text-gray-500 mb-1 block">Название / Текст</label>
                               <input
                                 type="text" value={preset.name}
-                                onChange={(e) => updatePreset(preset.id, 'name', e.target.value)}
+                        onChange={(e) => {
+                            updatePreset(preset.id, 'name', e.target.value);
+                        }}
                                 className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                               />
                             </div>
@@ -471,7 +519,9 @@
                               <label className="text-xs text-gray-500 mb-1 block">Клавиша запуска</label>
                               <input
                                 type="text" maxLength="1" value={preset.key.toUpperCase()}
-                                onChange={(e) => updatePreset(preset.id, 'key', e.target.value.toLowerCase())}
+                        onChange={(e) => {
+                            updatePreset(preset.id, 'key', e.target.value.toLowerCase());
+                        }}
                                 className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 text-center"
                               />
                             </div>
@@ -561,12 +611,20 @@
                         </div>
                       ))}
 
-                      <button
-                        onClick={() => setQrPresets(prev => [...prev, { id: Math.random().toString(), key: '', name: 'Новый код', type: 'url', url: '', wifiSsid: '', wifiPass: '', bgRadius: 16, padding: 16, dotType: 'square' }])}
-                        className="w-full py-3 border border-dashed border-white/20 hover:border-blue-500 hover:text-blue-400 rounded-xl font-medium flex items-center justify-center gap-2 transition"
-                      >
-                        <Plus size={18} /> Добавить пресет
-                      </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setQrPresets(prev => [...prev, { id: Math.random().toString(), key: '', name: 'Новый код', type: 'url', url: '', wifiSsid: '', wifiPass: '', bgRadius: 16, padding: 16, dotType: 'square' }])}
+                  className="flex-1 py-3 border border-dashed border-white/20 hover:border-blue-500 hover:text-blue-400 rounded-xl font-medium flex items-center justify-center gap-2 transition"
+                >
+                  <Plus size={18} /> Добавить пресет
+                </button>
+                <button
+                  onClick={saveAllData}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition shadow-lg"
+                >
+                  <Save size={18} /> Сохранить
+                </button>
+              </div>
                     </div>
                   )}
 
@@ -581,7 +639,7 @@
                       </div>
 
                       <div>
-                        <input 
+                        <input
                           type="file" accept="image/*" className="hidden"
                           ref={logoInputRef} onChange={handleLogoUpload}
                         />
