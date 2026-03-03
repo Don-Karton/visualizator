@@ -192,6 +192,16 @@
           // Оверлеи (активные горячие клавиши)
           const [activeOverlays, setActiveOverlays] = useState({});
 
+          // Логика авто-паузы при QR
+          useEffect(() => {
+            const isAnyQrActive = qrPresets.some(p => activeOverlays[p.key]);
+            if (isAnyQrActive) {
+              setIsPlaying(false);
+            } else {
+              setIsPlaying(true);
+            }
+          }, [activeOverlays, qrPresets]);
+
           // Логотип (Z)
           const [logoSettings, setLogoSettings] = useState(() => loadSavedData('logoSettings', {
             url: null,
@@ -210,13 +220,10 @@
 
           // Эффекты (Canvas)
           const [effects, setEffects] = useState(() => loadSavedData('effectsSettings', {
-            glitch: { enabled: false, intensity: 0.5, frequency: 0.2, amount: 5 },
-            channelFlicker: { enabled: false, intensity: 0.3, speed: 0.5 },
-            glowFlicker: { enabled: false, intensity: 0.6, color: '#ffffff', size: 50, frequency: 0.5 },
-            starrySky: { enabled: false, count: 100, size: 2, speed: 0.1, color: '#ffffff' },
-            flickeringDots: { enabled: false, count: 50, size: 5, frequency: 0.5, color: '#3b82f6' },
-            globalGlow: { enabled: false, intensity: 0.5, blur: 20, color: '#ffffff' },
-            exposureFlicker: { enabled: false, intensity: 0.3, speed: 0.5 }
+            rgbGlitch: { enabled: false, intensity: 0.5, frequency: 0.2 },
+            glitchGlow: { enabled: false, intensity: 0.6, color: '#ffffff', size: 50, frequency: 0.5 },
+            glitchExposure: { enabled: false, intensity: 0.3, frequency: 0.3 },
+            starrySky: { enabled: false, count: 100, size: 2, speed: 0.1, color: '#ffffff' }
           }));
           const canvasRef = useRef(null);
 
@@ -361,37 +368,45 @@
             };
             initStars();
 
-            let dots = [];
-            const initDots = () => {
-              dots = Array.from({ length: effects.flickeringDots.count }, () => ({
-                x: Math.random() * canvas.width,
-                y: Math.random() * canvas.height,
-                phase: Math.random() * Math.PI * 2
-              }));
-            };
-            initDots();
-
             const render = (time) => {
               ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-              // Exposure Flicker
-              if (effects.exposureFlicker.enabled) {
-                if (Math.random() < effects.exposureFlicker.speed) {
-                  const flicker = (Math.random() - 0.5) * effects.exposureFlicker.intensity;
-                  ctx.fillStyle = flicker > 0 ? '#ffffff' : '#000000';
-                  ctx.globalAlpha = Math.abs(flicker);
-                  ctx.fillRect(0, 0, canvas.width, canvas.height);
-                  ctx.globalAlpha = 1.0;
-                }
+              // RGB Glitch
+              if (effects.rgbGlitch.enabled && Math.random() < effects.rgbGlitch.frequency) {
+                const offset = effects.rgbGlitch.intensity * 20;
+                ctx.save();
+                ctx.globalAlpha = 0.3;
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(Math.random() * offset - offset/2, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(Math.random() * offset - offset/2, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#0000ff';
+                ctx.fillRect(Math.random() * offset - offset/2, 0, canvas.width, canvas.height);
+                ctx.restore();
               }
 
-              // Global Glow (Bloom Simulation)
-              if (effects.globalGlow.enabled) {
+              // Glitch Exposure
+              if (effects.glitchExposure.enabled && Math.random() < effects.glitchExposure.frequency) {
+                const flicker = (Math.random() - 0.5) * effects.glitchExposure.intensity;
+                ctx.fillStyle = flicker > 0 ? '#ffffff' : '#000000';
+                ctx.globalAlpha = Math.abs(flicker);
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.globalAlpha = 1.0;
+              }
+
+              // Glitch Glow
+              if (effects.glitchGlow.enabled && Math.random() < effects.glitchGlow.frequency) {
                 ctx.save();
-                ctx.filter = `blur(${effects.globalGlow.blur}px)`;
-                ctx.globalAlpha = effects.globalGlow.intensity;
                 ctx.globalCompositeOperation = 'screen';
-                ctx.fillStyle = effects.globalGlow.color;
+                const gradient = ctx.createRadialGradient(
+                  canvas.width/2, canvas.height/2, 0,
+                  canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * (effects.glitchGlow.size / 100)
+                );
+                gradient.addColorStop(0, effects.glitchGlow.color);
+                gradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = effects.glitchGlow.intensity;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.restore();
               }
@@ -410,65 +425,6 @@
                   ctx.fill();
                 });
                 ctx.globalAlpha = 1.0;
-              }
-
-              // Flickering Dots
-              if (effects.flickeringDots.enabled) {
-                if (dots.length !== effects.flickeringDots.count) initDots();
-                ctx.fillStyle = effects.flickeringDots.color;
-                dots.forEach(dot => {
-                  dot.phase += effects.flickeringDots.frequency * 0.1;
-                  const opacity = (Math.sin(dot.phase) + 1) / 2;
-                  ctx.globalAlpha = opacity;
-                  ctx.beginPath();
-                  ctx.arc(dot.x, dot.y, effects.flickeringDots.size, 0, Math.PI * 2);
-                  ctx.fill();
-                });
-                ctx.globalAlpha = 1.0;
-              }
-
-              // Glow Flicker
-              if (effects.glowFlicker.enabled) {
-                const isFlickering = Math.random() < (effects.glowFlicker.frequency || 0.5);
-                const flicker = isFlickering ? effects.glowFlicker.intensity : (effects.glowFlicker.intensity * 0.3);
-
-                if (flicker > 0) {
-                  ctx.save();
-                  ctx.globalCompositeOperation = 'screen';
-                  const gradient = ctx.createRadialGradient(
-                    canvas.width/2, canvas.height/2, 0,
-                    canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height) * (effects.glowFlicker.size / 100)
-                  );
-                  gradient.addColorStop(0, effects.glowFlicker.color);
-                  gradient.addColorStop(0.5, effects.glowFlicker.color + '44');
-                  gradient.addColorStop(1, 'transparent');
-                  ctx.fillStyle = gradient;
-                  ctx.globalAlpha = flicker;
-                  ctx.fillRect(0, 0, canvas.width, canvas.height);
-                  ctx.restore();
-                }
-              }
-
-              // Channel Flicker (RGB Split simulation)
-              if (effects.channelFlicker.enabled && Math.random() < effects.channelFlicker.speed) {
-                ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
-                ctx.fillRect(Math.random() * 10 - 5, 0, canvas.width, canvas.height);
-                ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
-                ctx.fillRect(Math.random() * 10 - 5, 0, canvas.width, canvas.height);
-              }
-
-              // Glitch (Static/Noise blocks)
-              if (effects.glitch.enabled && Math.random() < effects.glitch.frequency) {
-                const amount = effects.glitch.amount || 5;
-                for (let i = 0; i < amount; i++) {
-                  ctx.fillStyle = `rgba(255,255,255,${Math.random() * effects.glitch.intensity})`;
-                  ctx.fillRect(
-                    Math.random() * canvas.width,
-                    Math.random() * canvas.height,
-                    Math.random() * (canvas.width * 0.2) * effects.glitch.intensity,
-                    Math.random() * 20
-                  );
-                }
               }
 
               animationFrameId = requestAnimationFrame(render);
@@ -739,6 +695,16 @@
               <div
                 className={`absolute bottom-0 left-0 right-0 h-40 bg-black/90 backdrop-blur-xl border-t border-white/10 z-[60] transition-transform duration-500 transform ${activeTab === 'timeline' && settingsOpen ? 'translate-y-0' : 'translate-y-full'}`}
               >
+                {/* Маркер текущей позиции */}
+                {isPlaying && mediaQueue.length > 0 && (
+                  <div
+                    className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-50 pointer-events-none transition-all duration-500 shadow-[0_0_10px_#3b82f6]"
+                    style={{
+                      left: `${24 + mediaQueue.slice(0, currentIndex).reduce((acc, m) => acc + ((m.type.startsWith('video/') ? 10 : (m.duration || imageDuration)) * 10 + 8), 0)}px`
+                    }}
+                  />
+                )}
+
                 {/* Временная шкала (секунды) */}
                 <div className="absolute top-0 left-0 right-0 h-6 border-b border-white/5 flex items-center px-6 overflow-hidden">
                    {Array.from({ length: Math.max(20, Math.ceil(mediaQueue.reduce((acc, m) => acc + (m.duration || imageDuration), 0) / 10) + 5) }).map((_, i) => (
@@ -846,6 +812,26 @@
                         {mediaQueue.map((item, idx) => (
                           <div
                             key={item.id}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("text/plain", idx);
+                              e.currentTarget.classList.add('opacity-50');
+                            }}
+                            onDragEnd={(e) => {
+                              e.currentTarget.classList.remove('opacity-50');
+                            }}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              const fromIdx = parseInt(e.dataTransfer.getData("text/plain"));
+                              const toIdx = idx;
+                              if (fromIdx === toIdx) return;
+                              const newQueue = [...mediaQueue];
+                              const [moved] = newQueue.splice(fromIdx, 1);
+                              newQueue.splice(toIdx, 0, moved);
+                              setMediaQueue(newQueue);
+                              if (currentIndex === fromIdx) setCurrentIndex(toIdx);
+                            }}
                             onClick={() => setCurrentIndex(idx)}
                             className={`flex items-center gap-3 p-2 rounded-xl border cursor-pointer transition-all ${idx === currentIndex ? 'bg-blue-600/20 border-blue-500' : 'bg-black/40 border-white/5 hover:border-white/20'}`}
                           >
@@ -894,19 +880,21 @@
                                   <Trash2 size={16} />
                                 </button>
                               </div>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] text-gray-500 uppercase">Время:</span>
-                                <input
-                                  type="number" min="1" max="600"
-                                  value={item.duration || imageDuration}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => {
-                                    const val = Math.max(1, Number(e.target.value));
-                                    setMediaQueue(prev => prev.map(m => m.id === item.id ? { ...m, duration: val } : m));
-                                  }}
-                                  className="w-12 bg-black/50 border border-white/10 rounded px-1 py-0.5 text-[10px] text-white text-center focus:outline-none focus:border-blue-500"
-                                />
-                              </div>
+                              {!item.type.startsWith('video/') && (
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[10px] text-gray-500 uppercase">Время:</span>
+                                  <input
+                                    type="number" min="1" max="600"
+                                    value={item.duration || imageDuration}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                      const val = Math.max(1, Number(e.target.value));
+                                      setMediaQueue(prev => prev.map(m => m.id === item.id ? { ...m, duration: val } : m));
+                                    }}
+                                    className="w-12 bg-black/50 border border-white/10 rounded px-1 py-0.5 text-[10px] text-white text-center focus:outline-none focus:border-blue-500"
+                                  />
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -952,7 +940,7 @@
                             onClick={() => setMediaQueue(prev => prev.map(m => m.type.startsWith('image/') ? { ...m, duration: imageDuration } : m))}
                             className="text-[10px] text-blue-400 hover:text-blue-300 uppercase underline"
                           >
-                            Применить ко всем
+                            Применить ко всем фото
                           </button>
                         </label>
                         <input 
@@ -1467,76 +1455,78 @@
                           <Monitor size={20} className="text-blue-400" /> Canvas Эффекты
                         </h3>
 
-                        {/* Glitch */}
+                        {/* RGB Glitch */}
                         <div className="bg-white/5 p-4 rounded-xl space-y-4">
                           <div className="flex items-center justify-between">
-                            <span className="font-medium">Глитч эффект</span>
+                            <span className="font-medium">RGB Глитч</span>
                             <label className="relative inline-flex items-center cursor-pointer">
-                              <input type="checkbox" className="sr-only peer" checked={effects.glitch.enabled} onChange={(e) => setEffects(prev => ({ ...prev, glitch: { ...prev.glitch, enabled: e.target.checked } }))} />
+                              <input type="checkbox" className="sr-only peer" checked={effects.rgbGlitch.enabled} onChange={(e) => setEffects(prev => ({ ...prev, rgbGlitch: { ...prev.rgbGlitch, enabled: e.target.checked } }))} />
                               <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                             </label>
                           </div>
-                          <div className={effects.glitch.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
-                            <div className="grid grid-cols-3 gap-4">
-                              <div>
-                                <label className="text-xs text-gray-500 block mb-1">Интенсивность</label>
-                                <input type="range" min="0" max="1" step="0.1" value={effects.glitch.intensity} onChange={(e) => setEffects(prev => ({ ...prev, glitch: { ...prev.glitch, intensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
-                              </div>
-                              <div>
-                                <label className="text-xs text-gray-500 block mb-1">Частота</label>
-                                <input type="range" min="0" max="1" step="0.1" value={effects.glitch.frequency} onChange={(e) => setEffects(prev => ({ ...prev, glitch: { ...prev.glitch, frequency: Number(e.target.value) } }))} className="w-full accent-blue-500" />
-                              </div>
-                              <div>
-                                <label className="text-xs text-gray-500 block mb-1">Количество</label>
-                                <input type="range" min="1" max="20" step="1" value={effects.glitch.amount || 5} onChange={(e) => setEffects(prev => ({ ...prev, glitch: { ...prev.glitch, amount: Number(e.target.value) } }))} className="w-full accent-blue-500" />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Channel Flicker */}
-                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">Мерцание по каналам</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input type="checkbox" className="sr-only peer" checked={effects.channelFlicker.enabled} onChange={(e) => setEffects(prev => ({ ...prev, channelFlicker: { ...prev.channelFlicker, enabled: e.target.checked } }))} />
-                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                          </div>
-                          <div className={effects.channelFlicker.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Скорость / Вероятность</label>
-                              <input type="range" min="0" max="1" step="0.1" value={effects.channelFlicker.speed} onChange={(e) => setEffects(prev => ({ ...prev, channelFlicker: { ...prev.channelFlicker, speed: Number(e.target.value) } }))} className="w-full accent-blue-500" />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Glow Flicker */}
-                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">Мерцание свечения</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input type="checkbox" className="sr-only peer" checked={effects.glowFlicker.enabled} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, enabled: e.target.checked } }))} />
-                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                          </div>
-                          <div className={effects.glowFlicker.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
+                          <div className={effects.rgbGlitch.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <label className="text-xs text-gray-500 block mb-1">Интенсивность</label>
-                                <input type="range" min="0" max="1" step="0.1" value={effects.glowFlicker.intensity} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, intensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                                <input type="range" min="0" max="1" step="0.1" value={effects.rgbGlitch.intensity} onChange={(e) => setEffects(prev => ({ ...prev, rgbGlitch: { ...prev.rgbGlitch, intensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
                               </div>
                               <div>
                                 <label className="text-xs text-gray-500 block mb-1">Частота</label>
-                                <input type="range" min="0.1" max="1" step="0.1" value={effects.glowFlicker.frequency || 0.5} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, frequency: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                                <input type="range" min="0" max="1" step="0.1" value={effects.rgbGlitch.frequency} onChange={(e) => setEffects(prev => ({ ...prev, rgbGlitch: { ...prev.rgbGlitch, frequency: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Glitch Glow */}
+                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Глитч свечения</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" checked={effects.glitchGlow.enabled} onChange={(e) => setEffects(prev => ({ ...prev, glitchGlow: { ...prev.glitchGlow, enabled: e.target.checked } }))} />
+                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                          </div>
+                          <div className={effects.glitchGlow.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Интенсивность</label>
+                                <input type="range" min="0" max="1" step="0.1" value={effects.glitchGlow.intensity} onChange={(e) => setEffects(prev => ({ ...prev, glitchGlow: { ...prev.glitchGlow, intensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Частота</label>
+                                <input type="range" min="0" max="1" step="0.1" value={effects.glitchGlow.frequency} onChange={(e) => setEffects(prev => ({ ...prev, glitchGlow: { ...prev.glitchGlow, frequency: Number(e.target.value) } }))} className="w-full accent-blue-500" />
                               </div>
                               <div>
                                 <label className="text-xs text-gray-500 block mb-1">Размер</label>
-                                <input type="range" min="10" max="200" value={effects.glowFlicker.size} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, size: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                                <input type="range" min="10" max="200" value={effects.glitchGlow.size} onChange={(e) => setEffects(prev => ({ ...prev, glitchGlow: { ...prev.glitchGlow, size: Number(e.target.value) } }))} className="w-full accent-blue-500" />
                               </div>
                               <div>
                                 <label className="text-xs text-gray-500 block mb-1">Цвет</label>
-                                <input type="color" value={effects.glowFlicker.color} onChange={(e) => setEffects(prev => ({ ...prev, glowFlicker: { ...prev.glowFlicker, color: e.target.value } }))} className="w-full h-8 bg-transparent rounded cursor-pointer" />
+                                <input type="color" value={effects.glitchGlow.color} onChange={(e) => setEffects(prev => ({ ...prev, glitchGlow: { ...prev.glitchGlow, color: e.target.value } }))} className="w-full h-8 bg-transparent rounded cursor-pointer" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Glitch Exposure */}
+                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Глитч экспозиции</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" checked={effects.glitchExposure.enabled} onChange={(e) => setEffects(prev => ({ ...prev, glitchExposure: { ...prev.glitchExposure, enabled: e.target.checked } }))} />
+                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                          </div>
+                          <div className={effects.glitchExposure.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Интенсивность</label>
+                                <input type="range" min="0" max="1" step="0.1" value={effects.glitchExposure.intensity} onChange={(e) => setEffects(prev => ({ ...prev, glitchExposure: { ...prev.glitchExposure, intensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Частота</label>
+                                <input type="range" min="0" max="1" step="0.1" value={effects.glitchExposure.frequency} onChange={(e) => setEffects(prev => ({ ...prev, glitchExposure: { ...prev.glitchExposure, frequency: Number(e.target.value) } }))} className="w-full accent-blue-500" />
                               </div>
                             </div>
                           </div>
@@ -1573,76 +1563,6 @@
                           </div>
                         </div>
 
-                        {/* Flickering Dots */}
-                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">Мерцающие точки</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input type="checkbox" className="sr-only peer" checked={effects.flickeringDots.enabled} onChange={(e) => setEffects(prev => ({ ...prev, flickeringDots: { ...prev.flickeringDots, enabled: e.target.checked } }))} />
-                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                          </div>
-                          <div className={effects.flickeringDots.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="text-xs text-gray-500 block mb-1">Размер</label>
-                                <input type="range" min="1" max="20" value={effects.flickeringDots.size} onChange={(e) => setEffects(prev => ({ ...prev, flickeringDots: { ...prev.flickeringDots, size: Number(e.target.value) } }))} className="w-full accent-blue-500" />
-                              </div>
-                              <div>
-                                <label className="text-xs text-gray-500 block mb-1">Частота</label>
-                                <input type="range" min="0.1" max="2" step="0.1" value={effects.flickeringDots.frequency} onChange={(e) => setEffects(prev => ({ ...prev, flickeringDots: { ...prev.flickeringDots, frequency: Number(e.target.value) } }))} className="w-full accent-blue-500" />
-                              </div>
-                            </div>
-                            <input type="color" value={effects.flickeringDots.color} onChange={(e) => setEffects(prev => ({ ...prev, flickeringDots: { ...prev.flickeringDots, color: e.target.value } }))} className="w-full h-8 bg-transparent rounded cursor-pointer" />
-                          </div>
-                        </div>
-
-                        {/* Global Glow */}
-                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">Общее свечение</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input type="checkbox" className="sr-only peer" checked={effects.globalGlow.enabled} onChange={(e) => setEffects(prev => ({ ...prev, globalGlow: { ...prev.globalGlow, enabled: e.target.checked } }))} />
-                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                          </div>
-                          <div className={effects.globalGlow.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="text-xs text-gray-500 block mb-1">Интенсивность</label>
-                                <input type="range" min="0" max="1" step="0.1" value={effects.globalGlow.intensity} onChange={(e) => setEffects(prev => ({ ...prev, globalGlow: { ...prev.globalGlow, intensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
-                              </div>
-                              <div>
-                                <label className="text-xs text-gray-500 block mb-1">Размытие (Blur)</label>
-                                <input type="range" min="0" max="100" value={effects.globalGlow.blur} onChange={(e) => setEffects(prev => ({ ...prev, globalGlow: { ...prev.globalGlow, blur: Number(e.target.value) } }))} className="w-full accent-blue-500" />
-                              </div>
-                            </div>
-                            <input type="color" value={effects.globalGlow.color} onChange={(e) => setEffects(prev => ({ ...prev, globalGlow: { ...prev.globalGlow, color: e.target.value } }))} className="w-full h-8 bg-transparent rounded cursor-pointer" />
-                          </div>
-                        </div>
-
-                        {/* Exposure Flicker */}
-                        <div className="bg-white/5 p-4 rounded-xl space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">Мерцание экспозиции</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input type="checkbox" className="sr-only peer" checked={effects.exposureFlicker.enabled} onChange={(e) => setEffects(prev => ({ ...prev, exposureFlicker: { ...prev.exposureFlicker, enabled: e.target.checked } }))} />
-                              <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                          </div>
-                          <div className={effects.exposureFlicker.enabled ? 'space-y-4' : 'opacity-30 pointer-events-none'}>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="text-xs text-gray-500 block mb-1">Интенсивность</label>
-                                <input type="range" min="0" max="1" step="0.1" value={effects.exposureFlicker.intensity} onChange={(e) => setEffects(prev => ({ ...prev, exposureFlicker: { ...prev.exposureFlicker, intensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
-                              </div>
-                              <div>
-                                <label className="text-xs text-gray-500 block mb-1">Скорость</label>
-                                <input type="range" min="0" max="1" step="0.1" value={effects.exposureFlicker.speed} onChange={(e) => setEffects(prev => ({ ...prev, exposureFlicker: { ...prev.exposureFlicker, speed: Number(e.target.value) } }))} className="w-full accent-blue-500" />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
 
                         <button
                           onClick={saveAllData}
