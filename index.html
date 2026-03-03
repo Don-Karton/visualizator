@@ -192,15 +192,25 @@
           // Оверлеи (активные горячие клавиши)
           const [activeOverlays, setActiveOverlays] = useState({});
 
-          // Логика авто-паузы при QR
+          // Логика авто-паузы при QR или Логотипе
           useEffect(() => {
             const isAnyQrActive = qrPresets.some(p => activeOverlays[p.key]);
-            if (isAnyQrActive) {
+            const isLogoActive = activeOverlays['z'];
+            if (isAnyQrActive || isLogoActive) {
               setIsPlaying(false);
             } else {
               setIsPlaying(true);
             }
           }, [activeOverlays, qrPresets]);
+
+          // Реф для управления воспроизведением видео
+          const videoRef = useRef(null);
+          useEffect(() => {
+            if (videoRef.current) {
+              if (isPlaying) videoRef.current.play().catch(() => {});
+              else videoRef.current.pause();
+            }
+          }, [isPlaying]);
 
           // Логотип (Z)
           const [logoSettings, setLogoSettings] = useState(() => loadSavedData('logoSettings', {
@@ -223,7 +233,7 @@
             rgbGlitch: { enabled: false, intensity: 0.5, frequency: 0.2 },
             glitchGlow: { enabled: false, intensity: 0.6, color: '#ffffff', size: 50, frequency: 0.5 },
             glitchExposure: { enabled: false, intensity: 0.3, frequency: 0.3 },
-            starrySky: { enabled: false, count: 100, size: 2, speed: 0.1, color: '#ffffff' }
+            starrySky: { enabled: false, count: 100, size: 2, speed: 0.1, color: '#ffffff', glowIntensity: 5, glowSize: 5 }
           }));
           const canvasRef = useRef(null);
 
@@ -414,17 +424,22 @@
               // Starry Sky
               if (effects.starrySky.enabled) {
                 if (stars.length !== effects.starrySky.count) initStars();
+                ctx.save();
                 ctx.fillStyle = effects.starrySky.color || '#ffffff';
+                if (effects.starrySky.glowIntensity > 0) {
+                  ctx.shadowBlur = effects.starrySky.glowSize || 5;
+                  ctx.shadowColor = effects.starrySky.color || '#ffffff';
+                }
                 stars.forEach(star => {
-                  star.opacity += (Math.random() - 0.5) * effects.starrySky.speed;
+                  star.opacity += (Math.random() - 0.5) * (effects.starrySky.speed || 0.1);
                   if (star.opacity < 0) star.opacity = 0;
                   if (star.opacity > 1) star.opacity = 1;
-                  ctx.globalAlpha = star.opacity;
+                  ctx.globalAlpha = star.opacity * (effects.starrySky.glowIntensity / 10 || 1);
                   ctx.beginPath();
                   ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
                   ctx.fill();
                 });
-                ctx.globalAlpha = 1.0;
+                ctx.restore();
               }
 
               animationFrameId = requestAnimationFrame(render);
@@ -574,7 +589,7 @@
                               ? `animate-${animationSettings.type}-in`
                               : `animate-${animationSettings.type}-out`;
 
-                            const displayAnimClass = (isActive && !isVideo && animationSettings.displayType !== 'none')
+                            const displayAnimClass = (isActive && animationSettings.displayType !== 'none')
                               ? `animate-${animationSettings.displayType}`
                               : '';
 
@@ -591,6 +606,7 @@
                                 <div className={`w-full h-full flex items-center justify-center ${displayAnimClass}`}>
                                 {isVideo ? (
                                   <video
+                                    ref={isActive ? videoRef : null}
                                     src={item.url}
                                     autoPlay
                                     muted
@@ -1548,7 +1564,7 @@
                                 <input type="range" min="10" max="500" step="10" value={effects.starrySky.count} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, count: Number(e.target.value) } }))} className="w-full accent-blue-500" />
                               </div>
                               <div>
-                                <label className="text-xs text-gray-500 block mb-1">Размер / Скорость</label>
+                                <label className="text-xs text-gray-500 block mb-1">Скорость мерцания</label>
                                 <input type="range" min="0.01" max="0.5" step="0.01" value={effects.starrySky.speed} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, speed: Number(e.target.value) } }))} className="w-full accent-blue-500" />
                               </div>
                               <div>
@@ -1558,6 +1574,14 @@
                               <div>
                                 <label className="text-xs text-gray-500 block mb-1">Цвет</label>
                                 <input type="color" value={effects.starrySky.color || '#ffffff'} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, color: e.target.value } }))} className="w-full h-8 bg-transparent rounded cursor-pointer" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Интенсивность свечения</label>
+                                <input type="range" min="0" max="20" step="1" value={effects.starrySky.glowIntensity || 0} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, glowIntensity: Number(e.target.value) } }))} className="w-full accent-blue-500" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Размер свечения</label>
+                                <input type="range" min="0" max="50" step="1" value={effects.starrySky.glowSize || 0} onChange={(e) => setEffects(prev => ({ ...prev, starrySky: { ...prev.starrySky, glowSize: Number(e.target.value) } }))} className="w-full accent-blue-500" />
                               </div>
                             </div>
                           </div>
