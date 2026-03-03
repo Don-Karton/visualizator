@@ -550,7 +550,14 @@
             <div className="relative w-screen h-screen bg-black overflow-hidden font-sans select-none text-gray-300">
 
               {/* Главный контейнер для слоев */}
-              <div className="absolute inset-0 z-0 overflow-hidden bg-black">
+              <div
+                className="absolute inset-0 z-0 overflow-hidden bg-black cursor-pointer"
+                onContextMenu={handleContextMenu}
+                onClick={(e) => {
+                  if (e.target.closest('button') || e.target.closest('input')) return;
+                  setSettingsOpen(!settingsOpen);
+                }}
+              >
                 {layers.map((layer, index) => {
                   if (!layer.visible) return null;
 
@@ -560,22 +567,8 @@
                     return (
                       <div
                         key="layer-media"
-                        className="absolute inset-0 flex items-center justify-center cursor-pointer overflow-hidden"
+                        className="absolute inset-0 flex items-center justify-center overflow-hidden"
                         style={layerZIndex}
-                        onContextMenu={handleContextMenu}
-                        onClick={(e) => {
-                          // Предотвращаем срабатывание при клике на UI элементы, если они вдруг окажутся внутри
-                          if (e.target.closest('button') || e.target.closest('input')) return;
-
-                          // Если клик по самому контейнеру или по медиа-элементам
-                          if (e.target === e.currentTarget ||
-                              e.target.tagName === 'VIDEO' ||
-                              e.target.tagName === 'IMG' ||
-                              e.target.classList.contains('animate-in') || // контейнеры анимаций
-                              e.target.parentElement?.id === 'layer-media') {
-                            setSettingsOpen(!settingsOpen);
-                          }
-                        }}
                       >
                         {mediaQueue.length > 0 ? (
                           mediaQueue.map((item, idx) => {
