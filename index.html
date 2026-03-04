@@ -177,6 +177,7 @@
           // Медиа
           const [mediaQueue, setMediaQueue] = useState([]);
           const [currentIndex, setCurrentIndex] = useState(0);
+          const [backgroundDim, setBackgroundDim] = useState(() => loadSavedData('backgroundDim', 40));
           const [imageDuration, setImageDuration] = useState(() => loadSavedData('imageDuration', 5));
           const [isPlaying, setIsPlaying] = useState(true);
 
@@ -199,7 +200,8 @@
                     url: URL.createObjectURL(file),
                     type: file.type,
                     name: fileName,
-                    duration: imageDuration
+                    duration: imageDuration,
+                    enabled: true
                   };
                 }));
 
@@ -319,6 +321,7 @@
             localStorage.setItem('layers', JSON.stringify(layers));
             localStorage.setItem('animationSettings', JSON.stringify(animationSettings));
             localStorage.setItem('effectsSettings', JSON.stringify(effects));
+            localStorage.setItem('backgroundDim', JSON.stringify(backgroundDim));
 
             // Визуальная индикация на кнопке сохранения
             const btn = document.getElementById('global-save-btn');
@@ -336,23 +339,47 @@
 
           // --- Логика воспроизведения медиа ---
           const nextMedia = useCallback(() => {
-            if (mediaQueue.length <= 1) {
-              if (mediaQueue.length === 1) setCurrentIndex(0);
+            if (mediaQueue.length === 0) return;
+
+            // Находим следующий включенный элемент
+            let nextIdx = (currentIndex + 1) % mediaQueue.length;
+            let found = false;
+
+            // Проходим максимум один круг
+            for (let i = 0; i < mediaQueue.length; i++) {
+              if (mediaQueue[nextIdx].enabled) {
+                found = true;
+                break;
+              }
+              nextIdx = (nextIdx + 1) % mediaQueue.length;
+            }
+
+            if (!found) {
+              setIsPlaying(false);
               return;
             }
+
+            if (nextIdx === currentIndex) return;
 
             setAnimatingOut(currentIndex);
 
             setTimeout(() => {
-              setCurrentIndex((prev) => (prev + 1) % mediaQueue.length);
+              setCurrentIndex(nextIdx);
               setAnimatingOut(null);
             }, animationSettings.outDuration * 1000);
-          }, [mediaQueue.length, currentIndex, animationSettings.outDuration]);
+          }, [mediaQueue, currentIndex, animationSettings.outDuration]);
 
           useEffect(() => {
             if (mediaQueue.length === 0 || !isPlaying) return;
 
             const currentMedia = mediaQueue[currentIndex];
+
+            // Если текущий элемент выключен, сразу переходим к следующему
+            if (currentMedia && !currentMedia.enabled) {
+              nextMedia();
+              return;
+            }
+
             // Если текущий файл - изображение, запускаем таймер
             if (currentMedia && currentMedia.type.startsWith('image/')) {
               const duration = currentMedia.duration || imageDuration;
@@ -539,7 +566,8 @@
               url: URL.createObjectURL(file),
               type: file.type,
               name: file.name,
-              duration: imageDuration
+              duration: imageDuration,
+              enabled: true
             }));
             setMediaQueue(prev => [...prev, ...newMedia]);
           };
@@ -694,8 +722,8 @@
                       <React.Fragment key={`layer-${layer.id}`}>
                         {/* Размытие фона при активных оверлеях */}
                         <div
-                          className={`absolute inset-0 bg-black/40 backdrop-blur-md pointer-events-none transition-opacity duration-500`}
-                          style={{ ...layerZIndex, opacity: isAnyOverlayActiveLocal ? 1 : 0 }}
+                          className={`absolute inset-0 bg-black backdrop-blur-md pointer-events-none transition-opacity duration-500`}
+                          style={{ ...layerZIndex, opacity: isAnyOverlayActiveLocal ? backgroundDim / 100 : 0 }}
                         />
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ zIndex: layerZIndex.zIndex + 1 }}>
                           {layer.id === 'logo' && activeOverlays['z'] && logoSettings.url && (
@@ -878,9 +906,18 @@
                               if (currentIndex === fromIdx) setCurrentIndex(toIdx);
                             }}
                             onClick={() => setCurrentIndex(idx)}
-                            className={`flex items-center gap-3 p-2 rounded-xl border cursor-pointer transition-all ${idx === currentIndex ? 'bg-blue-600/20 border-blue-500' : 'bg-black/40 border-white/5 hover:border-white/20'}`}
+                            className={`flex items-center gap-3 p-2 rounded-xl border cursor-pointer transition-all ${idx === currentIndex ? 'bg-blue-600/20 border-blue-500' : 'bg-black/40 border-white/5 hover:border-white/20'} ${!item.enabled ? 'opacity-50' : ''}`}
                           >
                             <div className="w-8 text-xs font-mono text-gray-500 text-center">{idx + 1}</div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMediaQueue(prev => prev.map(m => m.id === item.id ? { ...m, enabled: !m.enabled } : m));
+                              }}
+                              className={`p-1.5 rounded-lg transition ${item.enabled ? 'text-blue-400 hover:bg-blue-400/10' : 'text-gray-600 hover:bg-white/10'}`}
+                            >
+                              {item.enabled ? <Eye size={16} /> : <EyeOff size={16} />}
+                            </button>
                             <div className="w-16 h-10 bg-zinc-800 rounded overflow-hidden flex-shrink-0">
                               {item.type.startsWith('video/') ? (
                                 <video src={item.url} className="w-full h-full object-cover" />
@@ -1124,8 +1161,17 @@
                           </div>
                           <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                             {mediaQueue.map((item, idx) => (
-                              <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg bg-black/40 border ${idx === currentIndex ? 'border-blue-500/50' : 'border-transparent'}`}>
+                              <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg bg-black/40 border ${idx === currentIndex ? 'border-blue-500/50' : 'border-transparent'} ${!item.enabled ? 'opacity-50' : ''}`}>
                                 <div className="flex items-center gap-3 overflow-hidden">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setMediaQueue(prev => prev.map(m => m.id === item.id ? { ...m, enabled: !m.enabled } : m));
+                                    }}
+                                    className={`p-1.5 rounded-lg transition ${item.enabled ? 'text-blue-400 hover:bg-blue-400/10' : 'text-gray-600 hover:bg-white/10'}`}
+                                  >
+                                    {item.enabled ? <Eye size={16} /> : <EyeOff size={16} />}
+                                  </button>
                                   <div className="w-12 h-12 bg-zinc-800 rounded flex-shrink-0 overflow-hidden">
                                     {item.type.startsWith('video/') ? (
                                       <video src={item.url} className="w-full h-full object-cover opacity-70" />
@@ -1149,6 +1195,17 @@
                   {/* Вкладка: QR-коды */}
                   {activeTab === 'qr' && (
                     <div className="space-y-6 animate-in fade-in">
+                      <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                        <label className="text-sm font-medium text-white mb-2 block flex justify-between">
+                          <span>Затемнение фона (QR/Logo): {backgroundDim}%</span>
+                        </label>
+                        <input
+                          type="range" min="0" max="100" value={backgroundDim}
+                          onChange={(e) => setBackgroundDim(Number(e.target.value))}
+                          className="w-full accent-blue-500 cursor-pointer"
+                        />
+                      </div>
+
                       <p className="text-sm text-gray-400">
                         Настройте быстрые клавиши для вывода QR-кодов поверх экрана.
                       </p>
