@@ -185,29 +185,63 @@
           useEffect(() => {
             const loadAssets = async () => {
               try {
-                const response = await fetch('assets-manifest.json');
-                if (!response.ok) return;
-                const manifest = await response.json();
+                let manifest = [];
+                // 1. Попытка получить актуальный список файлов через GitHub API
+                try {
+                  const ghResponse = await fetch('https://api.github.com/repos/Don-Karton/visualizator/contents/assets');
+                  if (ghResponse.ok) {
+                    const data = await ghResponse.json();
+                    if (Array.isArray(data)) {
+                      manifest = data.filter(item => item.type === 'file').map(item => item.name);
+                    }
+                  }
+                } catch (ghError) {
+                  console.warn("GitHub API недоступен, используем локальный манифест");
+                }
+
+                // 2. Фолбек на локальный assets-manifest.json
+                if (manifest.length === 0) {
+                  const response = await fetch('assets-manifest.json');
+                  if (response.ok) {
+                    manifest = await response.json();
+                  }
+                }
+
+                if (manifest.length === 0) return;
 
                 const loadedMedia = await Promise.all(manifest.map(async (fileName) => {
-                  const fileResponse = await fetch(`assets/${encodeURIComponent(fileName)}`);
-                  const blob = await fileResponse.blob();
-                  const file = new File([blob], fileName, { type: blob.type });
+                  try {
+                    // Оптимизация: фильтрация по расширению перед загрузкой блоба
+                    const ext = fileName.split('.').pop().toLowerCase();
+                    const isImg = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext);
+                    const isVid = ['mp4', 'webm', 'ogg', 'mov'].includes(ext);
 
-                  return {
-                    id: Math.random().toString(36).substr(2, 9),
-                    file,
-                    url: URL.createObjectURL(file),
-                    type: file.type,
-                    name: fileName,
-                    duration: imageDuration,
-                    enabled: true
-                  };
+                    if (!isImg && !isVid) return null;
+
+                    const fileResponse = await fetch(`assets/${encodeURIComponent(fileName)}`);
+                    if (!fileResponse.ok) return null;
+                    const blob = await fileResponse.blob();
+                    const file = new File([blob], fileName, { type: blob.type });
+
+                    return {
+                      id: Math.random().toString(36).substr(2, 9),
+                      file,
+                      url: URL.createObjectURL(file),
+                      type: file.type,
+                      name: fileName,
+                      duration: imageDuration,
+                      enabled: true
+                    };
+                  } catch (fileErr) {
+                    return null;
+                  }
                 }));
+
+                const validMedia = loadedMedia.filter(m => m !== null);
 
                 setMediaQueue(prev => {
                   const existingNames = new Set(prev.map(m => m.name));
-                  const uniqueNewMedia = loadedMedia.filter(m => !existingNames.has(m.name));
+                  const uniqueNewMedia = validMedia.filter(m => !existingNames.has(m.name));
                   return [...prev, ...uniqueNewMedia];
                 });
               } catch (e) {
