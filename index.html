@@ -180,6 +180,42 @@
           const [imageDuration, setImageDuration] = useState(() => loadSavedData('imageDuration', 5));
           const [isPlaying, setIsPlaying] = useState(true);
 
+          // Автоматическая загрузка из папки assets
+          useEffect(() => {
+            const loadAssets = async () => {
+              try {
+                const response = await fetch('assets-manifest.json');
+                if (!response.ok) return;
+                const manifest = await response.json();
+
+                const loadedMedia = await Promise.all(manifest.map(async (fileName) => {
+                  const fileResponse = await fetch(`assets/${encodeURIComponent(fileName)}`);
+                  const blob = await fileResponse.blob();
+                  const file = new File([blob], fileName, { type: blob.type });
+
+                  return {
+                    id: Math.random().toString(36).substr(2, 9),
+                    file,
+                    url: URL.createObjectURL(file),
+                    type: file.type,
+                    name: fileName,
+                    duration: imageDuration
+                  };
+                }));
+
+                setMediaQueue(prev => {
+                  const existingNames = new Set(prev.map(m => m.name));
+                  const uniqueNewMedia = loadedMedia.filter(m => !existingNames.has(m.name));
+                  return [...prev, ...uniqueNewMedia];
+                });
+              } catch (e) {
+                console.error("Ошибка автозагрузки ассетов:", e);
+              }
+            };
+
+            loadAssets();
+          }, []);
+
           // Анимации
           const [animationSettings, setAnimationSettings] = useState(() => loadSavedData('animationSettings', {
             type: 'fade', // fade, slide, zoom
