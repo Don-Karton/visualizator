@@ -178,6 +178,7 @@
           const [mediaQueue, setMediaQueue] = useState([]);
           const [currentIndex, setCurrentIndex] = useState(0);
           const [backgroundDim, setBackgroundDim] = useState(() => loadSavedData('backgroundDim', 40));
+          const [backgroundBlur, setBackgroundBlur] = useState(() => loadSavedData('backgroundBlur', 12));
           const [imageDuration, setImageDuration] = useState(() => loadSavedData('imageDuration', 5));
           const [isPlaying, setIsPlaying] = useState(true);
 
@@ -322,6 +323,7 @@
             localStorage.setItem('animationSettings', JSON.stringify(animationSettings));
             localStorage.setItem('effectsSettings', JSON.stringify(effects));
             localStorage.setItem('backgroundDim', JSON.stringify(backgroundDim));
+            localStorage.setItem('backgroundBlur', JSON.stringify(backgroundBlur));
 
             // Визуальная индикация на кнопке сохранения
             const btn = document.getElementById('global-save-btn');
@@ -538,6 +540,8 @@
                 setSettingsOpen(prev => !prev);
               } else if (key === 'z') {
                 setActiveOverlays(prev => ({ ...prev, 'z': !prev['z'] }));
+              } else if (key === 'v') {
+                toggleLayerVisibility('media');
               } else {
                 // Проверка QR пресетов
                 const preset = qrPresets.find(p => p.key.toLowerCase() === key);
@@ -722,8 +726,13 @@
                       <React.Fragment key={`layer-${layer.id}`}>
                         {/* Размытие фона при активных оверлеях */}
                         <div
-                          className={`absolute inset-0 bg-black backdrop-blur-md pointer-events-none transition-opacity duration-500`}
-                          style={{ ...layerZIndex, opacity: isAnyOverlayActiveLocal ? backgroundDim / 100 : 0 }}
+                          className={`absolute inset-0 bg-black pointer-events-none transition-opacity duration-500`}
+                          style={{
+                            ...layerZIndex,
+                            opacity: isAnyOverlayActiveLocal ? backgroundDim / 100 : 0,
+                            backdropFilter: `blur(${backgroundBlur}px)`,
+                            WebkitBackdropFilter: `blur(${backgroundBlur}px)`
+                          }}
                         />
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ zIndex: layerZIndex.zIndex + 1 }}>
                           {layer.id === 'logo' && activeOverlays['z'] && logoSettings.url && (
@@ -1151,6 +1160,13 @@
                           <div className="flex justify-between items-center text-sm mb-3">
                             <span className="text-gray-400">Очередь воспроизведения ({mediaQueue.length})</span>
                             <div className="flex gap-2">
+                              <button
+                                onClick={() => toggleLayerVisibility('media')}
+                                className={`p-1 rounded transition ${layers.find(l => l.id === 'media')?.visible ? 'text-blue-400 hover:bg-blue-400/10' : 'text-gray-500 hover:bg-white/10'}`}
+                                title="Показать/Скрыть медиа (V)"
+                              >
+                                {layers.find(l => l.id === 'media')?.visible ? <Eye size={16} /> : <EyeOff size={16} />}
+                              </button>
                               <button onClick={() => setIsPlaying(!isPlaying)} className="p-1 hover:bg-white/10 rounded text-white">
                                 {isPlaying ? <Pause size={16} /> : <Play size={16} />}
                               </button>
@@ -1202,6 +1218,17 @@
                         <input
                           type="range" min="0" max="100" value={backgroundDim}
                           onChange={(e) => setBackgroundDim(Number(e.target.value))}
+                          className="w-full accent-blue-500 cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                        <label className="text-sm font-medium text-white mb-2 block flex justify-between">
+                          <span>Размытие фона (Blur): {backgroundBlur}px</span>
+                        </label>
+                        <input
+                          type="range" min="0" max="100" value={backgroundBlur}
+                          onChange={(e) => setBackgroundBlur(Number(e.target.value))}
                           className="w-full accent-blue-500 cursor-pointer"
                         />
                       </div>
