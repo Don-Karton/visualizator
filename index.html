@@ -178,6 +178,7 @@
           const [mediaQueue, setMediaQueue] = useState([]);
           const [currentIndex, setCurrentIndex] = useState(0);
           const [backgroundDim, setBackgroundDim] = useState(() => loadSavedData('backgroundDim', 40));
+          const [backgroundBlur, setBackgroundBlur] = useState(() => loadSavedData('backgroundBlur', 20));
           const [imageDuration, setImageDuration] = useState(() => loadSavedData('imageDuration', 5));
           const [isPlaying, setIsPlaying] = useState(true);
 
@@ -209,33 +210,27 @@
 
                 if (manifest.length === 0) return;
 
-                const loadedMedia = await Promise.all(manifest.map(async (fileName) => {
-                  try {
-                    // Оптимизация: фильтрация по расширению перед загрузкой блоба
-                    const ext = fileName.split('.').pop().toLowerCase();
-                    const isImg = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext);
-                    const isVid = ['mp4', 'webm', 'ogg', 'mov'].includes(ext);
+                const loadedMedia = manifest.map((fileName) => {
+                  const ext = fileName.split('.').pop().toLowerCase();
+                  const isImg = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext);
+                  const isVid = ['mp4', 'webm', 'ogg', 'mov'].includes(ext);
 
-                    if (!isImg && !isVid) return null;
+                  if (!isImg && !isVid) return null;
 
-                    const fileResponse = await fetch(`assets/${encodeURIComponent(fileName)}`);
-                    if (!fileResponse.ok) return null;
-                    const blob = await fileResponse.blob();
-                    const file = new File([blob], fileName, { type: blob.type });
+                  // Оптимизация: используем прямые ссылки вместо загрузки Blobs
+                  const url = `assets/${encodeURIComponent(fileName)}`;
+                  const type = isImg ? `image/${ext}` : `video/${ext}`;
 
-                    return {
-                      id: Math.random().toString(36).substr(2, 9),
-                      file,
-                      url: URL.createObjectURL(file),
-                      type: file.type,
-                      name: fileName,
-                      duration: imageDuration,
-                      enabled: true
-                    };
-                  } catch (fileErr) {
-                    return null;
-                  }
-                }));
+                  return {
+                    id: Math.random().toString(36).substr(2, 9),
+                    url: url,
+                    type: type,
+                    name: fileName,
+                    duration: imageDuration,
+                    enabled: true,
+                    isLocalAsset: true // Пометка, что это локальный ассет (не Blob)
+                  };
+                });
 
                 const validMedia = loadedMedia.filter(m => m !== null);
 
@@ -356,6 +351,7 @@
             localStorage.setItem('animationSettings', JSON.stringify(animationSettings));
             localStorage.setItem('effectsSettings', JSON.stringify(effects));
             localStorage.setItem('backgroundDim', JSON.stringify(backgroundDim));
+            localStorage.setItem('backgroundBlur', JSON.stringify(backgroundBlur));
 
             // Визуальная индикация на кнопке сохранения
             const btn = document.getElementById('global-save-btn');
@@ -756,8 +752,12 @@
                       <React.Fragment key={`layer-${layer.id}`}>
                         {/* Размытие фона при активных оверлеях */}
                         <div
-                          className={`absolute inset-0 bg-black backdrop-blur-md pointer-events-none transition-opacity duration-500`}
-                          style={{ ...layerZIndex, opacity: isAnyOverlayActiveLocal ? backgroundDim / 100 : 0 }}
+                          className={`absolute inset-0 pointer-events-none transition-all duration-500`}
+                          style={{
+                            ...layerZIndex,
+                            backgroundColor: isAnyOverlayActiveLocal ? `rgba(0, 0, 0, ${backgroundDim / 100})` : 'transparent',
+                            backdropFilter: isAnyOverlayActiveLocal ? `blur(${backgroundBlur}px)` : 'none'
+                          }}
                         />
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ zIndex: layerZIndex.zIndex + 1 }}>
                           {layer.id === 'logo' && activeOverlays['z'] && logoSettings.url && (
@@ -1236,6 +1236,15 @@
                         <input
                           type="range" min="0" max="100" value={backgroundDim}
                           onChange={(e) => setBackgroundDim(Number(e.target.value))}
+                          className="w-full accent-blue-500 cursor-pointer"
+                        />
+
+                        <label className="text-sm font-medium text-white mt-4 mb-2 block flex justify-between">
+                          <span>Размытие фона (QR/Logo): {backgroundBlur}px</span>
+                        </label>
+                        <input
+                          type="range" min="0" max="100" value={backgroundBlur}
+                          onChange={(e) => setBackgroundBlur(Number(e.target.value))}
                           className="w-full accent-blue-500 cursor-pointer"
                         />
                       </div>
