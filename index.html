@@ -87,13 +87,16 @@
           Clock, ChevronLeft, ChevronRight, Download, List, Copy
         } = LucideReact;
 
-        // --- IndexedDB для хранения медиафайлов ---
+        // --- IndexedDB для хранения медиафайлов и логотипов ---
         const dbPromise = new Promise((resolve, reject) => {
-          const request = indexedDB.open("VisualizerDB", 1);
+          const request = indexedDB.open("VisualizerDB", 2);
           request.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains("playlists")) {
               db.createObjectStore("playlists", { keyPath: "id" });
+            }
+            if (!db.objectStoreNames.contains("logos")) {
+              db.createObjectStore("logos", { keyPath: "id" });
             }
           };
           request.onsuccess = (e) => resolve(e.target.result);
@@ -119,6 +122,39 @@
             const req = store.get("current");
             req.onsuccess = () => resolve(req.result ? req.result.media : null);
             req.onerror = () => reject(req.error);
+          });
+        };
+
+        const saveLogoToDB = async (logo) => {
+          const db = await dbPromise;
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction("logos", "readwrite");
+            const store = tx.objectStore("logos");
+            store.put(logo);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        };
+
+        const loadLogosFromDB = async () => {
+          const db = await dbPromise;
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction("logos", "readonly");
+            const store = tx.objectStore("logos");
+            const req = store.getAll();
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+        };
+
+        const deleteLogoFromDB = async (id) => {
+          const db = await dbPromise;
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction("logos", "readwrite");
+            const store = tx.objectStore("logos");
+            store.delete(id);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
           });
         };
 
@@ -291,7 +327,8 @@
               outAnim: 'fade',
               displayAnim: 'none',
               inDuration: 0.5,
-              outDuration: 0.5
+              outDuration: 0.5,
+              isLocalAsset: true
             },
             {
               id: 'preset-2',
@@ -303,7 +340,8 @@
               outAnim: 'fade',
               displayAnim: 'none',
               inDuration: 0.5,
-              outDuration: 0.5
+              outDuration: 0.5,
+              isLocalAsset: true
             },
             {
               id: 'preset-3',
@@ -315,9 +353,52 @@
               outAnim: 'fade',
               displayAnim: 'none',
               inDuration: 0.5,
-              outDuration: 0.5
+              outDuration: 0.5,
+              isLocalAsset: true
             }
           ]));
+
+          useEffect(() => {
+            let urls = [];
+            const restoreLogos = async () => {
+              try {
+                const storedLogos = await loadLogosFromDB();
+                if (storedLogos && storedLogos.length > 0) {
+                  const restored = storedLogos.map(logo => {
+                    const url = URL.createObjectURL(logo.file);
+                    urls.push(url);
+                    return { ...logo, url };
+                  });
+
+                  setLogoPresets(prev => {
+                    const localAssets = prev.filter(p => p.isLocalAsset);
+                    // Объединяем блоб-URL с актуальными настройками из LocalStorage
+                    const restoredWithSettings = restored.map(r => {
+                      const existing = prev.find(p => p.id === r.id);
+                      if (existing) {
+                        return { ...existing, url: r.url };
+                      }
+                      return r;
+                    });
+
+                    // Сохраняем только те, что реально есть (локальные + восстановленные)
+                    const uploadedIds = new Set(restored.map(r => r.id));
+                    const activeUploaded = prev.filter(p => !p.isLocalAsset && uploadedIds.has(p.id));
+
+                    // Если в стейте были настройки для логотипа, которого нет в IDB, они отфильтруются
+                    return [...localAssets, ...restoredWithSettings];
+                  });
+                }
+              } catch (e) {
+                console.error("Ошибка восстановления логотипов:", e);
+              }
+            };
+            restoreLogos();
+            return () => {
+              urls.forEach(url => URL.revokeObjectURL(url));
+            };
+          }, []);
+
           const [activeLogoId, setActiveLogoId] = useState(() => loadSavedData('activeLogoId', 'preset-1'));
           const [logoAnimatingOut, setLogoAnimatingOut] = useState(null);
 
@@ -581,6 +662,22 @@
             };
           }, [effects]);
 
+          const toggleLogo = useCallback(() => {
+            if (logoAnimatingOut) return;
+
+            if (activeOverlays['z']) {
+              const currentPreset = logoPresets.find(p => p.id === activeLogoId);
+              setLogoAnimatingOut(activeLogoId);
+              setTimeout(() => {
+                setActiveOverlays(prev => ({ ...prev, 'z': false }));
+                setLogoAnimatingOut(null);
+              }, (currentPreset?.outDuration || 0.5) * 1000);
+            } else {
+              setLogoAnimatingOut(null);
+              setActiveOverlays(prev => ({ ...prev, 'z': true }));
+            }
+          }, [activeOverlays, logoPresets, activeLogoId, logoAnimatingOut]);
+
           // --- Горячие клавиши ---
           useEffect(() => {
             const handleKeyDown = (e) => {
@@ -603,17 +700,7 @@
               if (key === 'q') {
                 setSettingsOpen(prev => !prev);
               } else if (key === 'z') {
-                if (activeOverlays['z']) {
-                  const currentPreset = logoPresets.find(p => p.id === activeLogoId);
-                  setLogoAnimatingOut(activeLogoId);
-                  setTimeout(() => {
-                    setActiveOverlays(prev => ({ ...prev, 'z': false }));
-                    setLogoAnimatingOut(null);
-                  }, (currentPreset?.outDuration || 0.5) * 1000);
-                } else {
-                  setLogoAnimatingOut(null);
-                  setActiveOverlays(prev => ({ ...prev, 'z': true }));
-                }
+                toggleLogo();
               } else {
                 // Проверка QR пресетов
                 const preset = qrPresets.find(p => p.key.toLowerCase() === key);
@@ -625,22 +712,12 @@
 
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
-          }, [qrPresets]);
+          }, [qrPresets, toggleLogo]);
 
           // Переключение логотипа через ПКМ
           const handleContextMenu = (e) => {
             e.preventDefault();
-            if (activeOverlays['z']) {
-              const currentPreset = logoPresets.find(p => p.id === activeLogoId);
-              setLogoAnimatingOut(activeLogoId);
-              setTimeout(() => {
-                setActiveOverlays(prev => ({ ...prev, 'z': false }));
-                setLogoAnimatingOut(null);
-              }, (currentPreset?.outDuration || 0.5) * 1000);
-            } else {
-              setLogoAnimatingOut(null);
-              setActiveOverlays(prev => ({ ...prev, 'z': true }));
-            }
+            toggleLogo();
           };
 
           // --- Обработчики загрузки файлов ---
@@ -666,11 +743,12 @@
             });
           };
 
-          const handleLogoUpload = (e) => {
+          const handleLogoUpload = async (e) => {
             const file = e.target.files[0];
             if (file) {
+              const id = Math.random().toString(36).substr(2, 9);
               const newPreset = {
-                id: Math.random().toString(36).substr(2, 9),
+                id,
                 name: file.name,
                 url: URL.createObjectURL(file),
                 size: 30,
@@ -679,11 +757,41 @@
                 outAnim: 'fade',
                 displayAnim: 'none',
                 inDuration: 0.5,
-                outDuration: 0.5
+                outDuration: 0.5,
+                file: file // Сохраняем файл для IDB
               };
+
+              // Сохраняем в IDB
+              await saveLogoToDB({
+                id,
+                name: newPreset.name,
+                file: file,
+                size: newPreset.size,
+                opacity: newPreset.opacity,
+                inAnim: newPreset.inAnim,
+                outAnim: newPreset.outAnim,
+                displayAnim: newPreset.displayAnim,
+                inDuration: newPreset.inDuration,
+                outDuration: newPreset.outDuration
+              });
+
               setLogoPresets(prev => [...prev, newPreset]);
               setActiveLogoId(newPreset.id);
             }
+          };
+
+          const removeLogoPreset = async (id) => {
+            const preset = logoPresets.find(p => p.id === id);
+            if (preset && !preset.isLocalAsset) {
+              await deleteLogoFromDB(id);
+            }
+            setLogoPresets(prev => {
+              const filtered = prev.filter(p => p.id !== id);
+              if (activeLogoId === id && filtered.length > 0) {
+                setActiveLogoId(filtered[0].id);
+              }
+              return filtered;
+            });
           };
 
           const toggleFullscreen = () => {
@@ -1530,8 +1638,7 @@
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (logoPresets.length > 1) {
-                                      setLogoPresets(prev => prev.filter(p => p.id !== preset.id));
-                                      if (activeLogoId === preset.id) setActiveLogoId(logoPresets.find(p => p.id !== preset.id).id);
+                                      removeLogoPreset(preset.id);
                                     }
                                   }}
                                   className="p-1 hover:bg-red-500 rounded text-white"
