@@ -262,13 +262,13 @@
           // Логика авто-паузы при QR или Логотипе
           useEffect(() => {
             const isAnyQrActive = qrPresets.some(p => activeOverlays[p.key]);
-            const isLogoActive = activeOverlays['z'];
+            const isLogoActive = activeOverlays['z'] || logoAnimatingOut;
             if (isAnyQrActive || isLogoActive) {
               setIsPlaying(false);
             } else {
               setIsPlaying(true);
             }
-          }, [activeOverlays, qrPresets]);
+          }, [activeOverlays, qrPresets, logoAnimatingOut]);
 
           // Реф для управления воспроизведением видео
           const videoRef = useRef(null);
@@ -280,11 +280,46 @@
           }, [isPlaying]);
 
           // Логотип (Z)
-          const [logoSettings, setLogoSettings] = useState(() => loadSavedData('logoSettings', {
-            url: null,
-            size: 30, // %
-            opacity: 100 // %
-          }));
+          const [logoPresets, setLogoPresets] = useState(() => loadSavedData('logoPresets', [
+            {
+              id: 'preset-1',
+              name: 'Ресурс 1',
+              url: 'assets/logos/Ресурс 1.webp',
+              size: 30,
+              opacity: 100,
+              inAnim: 'fade',
+              outAnim: 'fade',
+              displayAnim: 'none',
+              inDuration: 0.5,
+              outDuration: 0.5
+            },
+            {
+              id: 'preset-2',
+              name: 'Ресурс 2',
+              url: 'assets/logos/Ресурс 2.webp',
+              size: 30,
+              opacity: 100,
+              inAnim: 'fade',
+              outAnim: 'fade',
+              displayAnim: 'none',
+              inDuration: 0.5,
+              outDuration: 0.5
+            },
+            {
+              id: 'preset-3',
+              name: 'Ресурс 3',
+              url: 'assets/logos/Ресурс 3.webp',
+              size: 30,
+              opacity: 100,
+              inAnim: 'fade',
+              outAnim: 'fade',
+              displayAnim: 'none',
+              inDuration: 0.5,
+              outDuration: 0.5
+            }
+          ]));
+          const [activeLogoId, setActiveLogoId] = useState(() => loadSavedData('activeLogoId', 'preset-1'));
+          const [logoAnimatingOut, setLogoAnimatingOut] = useState(null);
 
           // Стробоскоп
           const [strobe, setStrobe] = useState(() => loadSavedData('strobe', {
@@ -344,7 +379,8 @@
           // Функция сохранения
           const saveAllData = () => {
             localStorage.setItem('qrPresets', JSON.stringify(qrPresets));
-            localStorage.setItem('logoSettings', JSON.stringify(logoSettings));
+            localStorage.setItem('logoPresets', JSON.stringify(logoPresets));
+            localStorage.setItem('activeLogoId', JSON.stringify(activeLogoId));
             localStorage.setItem('imageDuration', JSON.stringify(imageDuration));
             localStorage.setItem('strobe', JSON.stringify(strobe));
             localStorage.setItem('layers', JSON.stringify(layers));
@@ -567,7 +603,17 @@
               if (key === 'q') {
                 setSettingsOpen(prev => !prev);
               } else if (key === 'z') {
-                setActiveOverlays(prev => ({ ...prev, 'z': !prev['z'] }));
+                if (activeOverlays['z']) {
+                  const currentPreset = logoPresets.find(p => p.id === activeLogoId);
+                  setLogoAnimatingOut(activeLogoId);
+                  setTimeout(() => {
+                    setActiveOverlays(prev => ({ ...prev, 'z': false }));
+                    setLogoAnimatingOut(null);
+                  }, (currentPreset?.outDuration || 0.5) * 1000);
+                } else {
+                  setLogoAnimatingOut(null);
+                  setActiveOverlays(prev => ({ ...prev, 'z': true }));
+                }
               } else {
                 // Проверка QR пресетов
                 const preset = qrPresets.find(p => p.key.toLowerCase() === key);
@@ -584,7 +630,17 @@
           // Переключение логотипа через ПКМ
           const handleContextMenu = (e) => {
             e.preventDefault();
-            setActiveOverlays(prev => ({ ...prev, 'z': !prev['z'] }));
+            if (activeOverlays['z']) {
+              const currentPreset = logoPresets.find(p => p.id === activeLogoId);
+              setLogoAnimatingOut(activeLogoId);
+              setTimeout(() => {
+                setActiveOverlays(prev => ({ ...prev, 'z': false }));
+                setLogoAnimatingOut(null);
+              }, (currentPreset?.outDuration || 0.5) * 1000);
+            } else {
+              setLogoAnimatingOut(null);
+              setActiveOverlays(prev => ({ ...prev, 'z': true }));
+            }
           };
 
           // --- Обработчики загрузки файлов ---
@@ -613,7 +669,20 @@
           const handleLogoUpload = (e) => {
             const file = e.target.files[0];
             if (file) {
-              setLogoSettings(prev => ({ ...prev, url: URL.createObjectURL(file) }));
+              const newPreset = {
+                id: Math.random().toString(36).substr(2, 9),
+                name: file.name,
+                url: URL.createObjectURL(file),
+                size: 30,
+                opacity: 100,
+                inAnim: 'fade',
+                outAnim: 'fade',
+                displayAnim: 'none',
+                inDuration: 0.5,
+                outDuration: 0.5
+              };
+              setLogoPresets(prev => [...prev, newPreset]);
+              setActiveLogoId(newPreset.id);
             }
           };
 
@@ -760,17 +829,39 @@
                           }}
                         />
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ zIndex: layerZIndex.zIndex + 1 }}>
-                          {layer.id === 'logo' && activeOverlays['z'] && logoSettings.url && (
-                            <img
-                              src={logoSettings.url}
-                              className="absolute transition-all duration-300"
-                              style={{
-                                width: `${logoSettings.size}%`,
-                                opacity: logoSettings.opacity / 100,
-                                filter: 'drop-shadow(0 20px 30px rgba(0,0,0,0.5))'
-                              }}
-                              alt="Logo Overlay"
-                            />
+                          {layer.id === 'logo' && (activeOverlays['z'] || logoAnimatingOut) && (
+                            (() => {
+                              const presetId = logoAnimatingOut || activeLogoId;
+                              const preset = logoPresets.find(p => p.id === presetId);
+                              if (!preset || !preset.url) return null;
+
+                              const isExiting = !!logoAnimatingOut;
+                              const animClass = isExiting
+                                ? `animate-${preset.outAnim}-out`
+                                : `animate-${preset.inAnim}-in`;
+                              const displayAnimClass = (!isExiting && preset.displayAnim !== 'none')
+                                ? `animate-${preset.displayAnim}`
+                                : '';
+                              const duration = isExiting ? preset.outDuration : preset.inDuration;
+
+                              return (
+                                <div
+                                  className={`absolute inset-0 flex items-center justify-center ${animClass}`}
+                                  style={{ '--anim-duration': `${duration}s` }}
+                                >
+                                  <img
+                                    src={preset.url}
+                                    className={`transition-all ${displayAnimClass}`}
+                                    style={{
+                                      width: `${preset.size}%`,
+                                      opacity: preset.opacity / 100,
+                                      filter: 'drop-shadow(0 20px 30px rgba(0,0,0,0.5))'
+                                    }}
+                                    alt="Logo Overlay"
+                                  />
+                                </div>
+                              );
+                            })()
                           )}
 
                           {layer.id === 'qr' && qrPresets.map(preset => (
@@ -1408,62 +1499,171 @@
 
                   {/* Вкладка: Логотип */}
                   {activeTab === 'logo' && (
-                    <div className="space-y-6 animate-in fade-in">
+                    <div className="space-y-6 animate-in fade-in pb-10">
                       <div className="bg-white/5 p-4 rounded-xl border border-white/5 flex items-start gap-4">
                         <AlertCircle className="text-blue-400 flex-shrink-0 mt-0.5" size={20} />
                         <p className="text-sm text-gray-300">
-                          Логотип будет появляться поверх транслируемого контента при нажатии клавиши <kbd className="bg-black/50 px-2 py-0.5 rounded border border-white/20 text-white mx-1">Z</kbd>. Задний план будет слегка размыт.
+                          Логотип появляется при нажатии <kbd className="bg-black/50 px-2 py-0.5 rounded border border-white/20 text-white mx-1">Z</kbd>. Выберите пресет ниже.
                         </p>
                       </div>
 
-                      <div>
-                        <input
-                          type="file" accept="image/*" className="hidden"
-                          ref={logoInputRef} onChange={handleLogoUpload}
-                        />
-                        <button
-                          onClick={() => logoInputRef.current?.click()}
-                          className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition border border-white/5"
-                        >
-                          <Upload size={18} /> Загрузить PNG логотип
-                        </button>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-400 font-medium">Пресеты логотипов</span>
+                          <button
+                            onClick={() => logoInputRef.current?.click()}
+                            className="text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                          >
+                            <Plus size={14} /> Добавить
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {logoPresets.map(preset => (
+                            <div
+                              key={preset.id}
+                              onClick={() => setActiveLogoId(preset.id)}
+                              className={`relative group h-20 rounded-lg border-2 cursor-pointer transition-all overflow-hidden bg-black/40 ${activeLogoId === preset.id ? 'border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-white/5 hover:border-white/20'}`}
+                            >
+                              <img src={preset.url} className="w-full h-full object-contain p-2" alt={preset.name} />
+                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (logoPresets.length > 1) {
+                                      setLogoPresets(prev => prev.filter(p => p.id !== preset.id));
+                                      if (activeLogoId === preset.id) setActiveLogoId(logoPresets.find(p => p.id !== preset.id).id);
+                                    }
+                                  }}
+                                  className="p-1 hover:bg-red-500 rounded text-white"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
 
-                      {logoSettings.url && (
-                        <div className="space-y-6 bg-black/20 p-4 rounded-xl border border-white/5 mt-4">
-                          <div className="h-40 bg-zinc-900 rounded-lg flex items-center justify-center overflow-hidden relative checkerboard-bg">
-                            <img
-                              src={logoSettings.url}
-                              style={{ width: `${logoSettings.size}%`, opacity: logoSettings.opacity / 100 }}
-                              alt="Logo preview"
-                            />
-                          </div>
+                      {(() => {
+                        const selectedPreset = logoPresets.find(p => p.id === activeLogoId);
+                        if (!selectedPreset) return null;
 
-                          <div>
-                            <label className="text-sm font-medium text-white mb-2 flex justify-between">
-                              <span>Размер на экране</span>
-                              <span className="text-blue-400">{logoSettings.size}%</span>
-                            </label>
-                            <input
-                              type="range" min="5" max="100" value={logoSettings.size}
-                              onChange={(e) => setLogoSettings(prev => ({ ...prev, size: Number(e.target.value) }))}
-                              className="w-full accent-blue-500"
-                            />
-                          </div>
+                        const updateSelected = (field, value) => {
+                          setLogoPresets(prev => prev.map(p => p.id === activeLogoId ? { ...p, [field]: value } : p));
+                        };
 
-                          <div>
-                            <label className="text-sm font-medium text-white mb-2 flex justify-between">
-                              <span>Непрозрачность</span>
-                              <span className="text-blue-400">{logoSettings.opacity}%</span>
-                            </label>
-                            <input
-                              type="range" min="10" max="100" value={logoSettings.opacity}
-                              onChange={(e) => setLogoSettings(prev => ({ ...prev, opacity: Number(e.target.value) }))}
-                              className="w-full accent-blue-500"
-                            />
+                        return (
+                          <div className="space-y-6 bg-black/20 p-4 rounded-xl border border-white/5 mt-4">
+                            <div className="h-40 bg-zinc-900 rounded-lg flex items-center justify-center overflow-hidden relative checkerboard-bg">
+                              <div className={`flex items-center justify-center w-full h-full animate-${selectedPreset.inAnim}-in animate-${selectedPreset.displayAnim}`} style={{'--anim-duration': '1s'}}>
+                                <img
+                                  src={selectedPreset.url}
+                                  style={{ width: `${selectedPreset.size}%`, opacity: selectedPreset.opacity / 100 }}
+                                  alt="Logo preview"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-xs text-gray-500 mb-1 block">Название пресета</label>
+                              <input
+                                type="text"
+                                value={selectedPreset.name}
+                                onChange={(e) => updateSelected('name', e.target.value)}
+                                className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-gray-500 mb-1 block">Размер: {selectedPreset.size}%</label>
+                                <input
+                                  type="range" min="5" max="100" value={selectedPreset.size}
+                                  onChange={(e) => updateSelected('size', Number(e.target.value))}
+                                  className="w-full accent-blue-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 mb-1 block">Прозрачность: {selectedPreset.opacity}%</label>
+                                <input
+                                  type="range" min="10" max="100" value={selectedPreset.opacity}
+                                  onChange={(e) => updateSelected('opacity', Number(e.target.value))}
+                                  className="w-full accent-blue-500"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-4 pt-4 border-t border-white/5">
+                              <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Анимации</p>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="text-xs text-gray-500 mb-1 block">Появление</label>
+                                  <select
+                                    value={selectedPreset.inAnim}
+                                    onChange={(e) => updateSelected('inAnim', e.target.value)}
+                                    className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white"
+                                  >
+                                    <option value="fade">Fade</option>
+                                    <option value="slide">Slide</option>
+                                    <option value="zoom">Zoom</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-500 mb-1 block">Исчезание</label>
+                                  <select
+                                    value={selectedPreset.outAnim}
+                                    onChange={(e) => updateSelected('outAnim', e.target.value)}
+                                    className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white"
+                                  >
+                                    <option value="fade">Fade</option>
+                                    <option value="slide">Slide</option>
+                                    <option value="zoom">Zoom</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-xs text-gray-500 mb-1 block">Постоянный эффект</label>
+                                <select
+                                  value={selectedPreset.displayAnim}
+                                  onChange={(e) => updateSelected('displayAnim', e.target.value)}
+                                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white"
+                                >
+                                  <option value="none">Нет</option>
+                                  <option value="ken-burns">Ken Burns</option>
+                                  <option value="smooth-rotate">Rotation</option>
+                                  <option value="floating">Floating</option>
+                                </select>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="text-xs text-gray-500 mb-1 block">Вход: {selectedPreset.inDuration}с</label>
+                                  <input
+                                    type="range" min="0.1" max="3" step="0.1" value={selectedPreset.inDuration}
+                                    onChange={(e) => updateSelected('inDuration', Number(e.target.value))}
+                                    className="w-full accent-blue-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-500 mb-1 block">Выход: {selectedPreset.outDuration}с</label>
+                                  <input
+                                    type="range" min="0.1" max="3" step="0.1" value={selectedPreset.outDuration}
+                                    onChange={(e) => updateSelected('outDuration', Number(e.target.value))}
+                                    className="w-full accent-blue-500"
+                                  />
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
+
+                      <input
+                        type="file" accept="image/*" className="hidden"
+                        ref={logoInputRef} onChange={handleLogoUpload}
+                      />
                     </div>
                   )}
 
@@ -1748,7 +1948,8 @@
                                      if (p.data.qrPresets) setQrPresets(p.data.qrPresets);
                                      if (p.data.effects) setEffects(p.data.effects);
                                      if (p.data.strobe) setStrobe(p.data.strobe);
-                                     if (p.data.logoSettings) setLogoSettings(p.data.logoSettings);
+                                     if (p.data.logoPresets) setLogoPresets(p.data.logoPresets);
+                                     if (p.data.activeLogoId) setActiveLogoId(p.data.activeLogoId);
                                      if (p.data.animationSettings) setAnimationSettings(p.data.animationSettings);
                                      alert('Пресет загружен!');
                                    }}
@@ -1783,7 +1984,8 @@
                                   qrPresets,
                                   effects,
                                   strobe,
-                                  logoSettings,
+                                  logoPresets,
+                                  activeLogoId,
                                   animationSettings
                                 }
                               };
