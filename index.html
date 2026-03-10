@@ -516,6 +516,36 @@
             }, animationSettings.outDuration * 1000);
           }, [mediaQueue, currentIndex, animationSettings.outDuration]);
 
+          const prevMedia = useCallback(() => {
+            if (mediaQueue.length === 0) return;
+
+            // Находим предыдущий включенный элемент
+            let prevIdx = (currentIndex - 1 + mediaQueue.length) % mediaQueue.length;
+            let found = false;
+
+            for (let i = 0; i < mediaQueue.length; i++) {
+              if (mediaQueue[prevIdx].enabled) {
+                found = true;
+                break;
+              }
+              prevIdx = (prevIdx - 1 + mediaQueue.length) % mediaQueue.length;
+            }
+
+            if (!found) {
+              setIsPlaying(false);
+              return;
+            }
+
+            if (prevIdx === currentIndex) return;
+
+            setAnimatingOut(currentIndex);
+
+            setTimeout(() => {
+              setCurrentIndex(prevIdx);
+              setAnimatingOut(null);
+            }, animationSettings.outDuration * 1000);
+          }, [mediaQueue, currentIndex, animationSettings.outDuration]);
+
           useEffect(() => {
             if (mediaQueue.length === 0 || !isPlaying) return;
 
@@ -699,8 +729,12 @@
 
               if (key === 'q') {
                 setSettingsOpen(prev => !prev);
-              } else if (key === 'z') {
+              } else if (key === 'z' || key === '5') {
                 toggleLogo();
+              } else if (key === '6' || key === 'arrowright') {
+                nextMedia();
+              } else if (key === '4' || key === 'arrowleft') {
+                prevMedia();
               } else {
                 // Проверка QR пресетов
                 const preset = qrPresets.find(p => p.key.toLowerCase() === key);
@@ -712,7 +746,7 @@
 
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
-          }, [qrPresets, toggleLogo]);
+          }, [qrPresets, toggleLogo, nextMedia, prevMedia]);
 
           // Переключение логотипа через ПКМ
           const handleContextMenu = (e) => {
