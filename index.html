@@ -255,10 +255,11 @@
 
                   // Оптимизация: используем прямые ссылки вместо загрузки Blobs
                   const url = `assets/${encodeURIComponent(fileName)}`;
-                  const type = isImg ? `image/${ext}` : `video/${ext}`;
+                  let type = isImg ? `image/${ext}` : `video/${ext}`;
+                  if (ext === 'jpg' || ext === 'jpeg') type = 'image/jpeg';
 
                   return {
-                    id: Math.random().toString(36).substr(2, 9),
+                    id: fileName, // Используем имя файла как стабильный ID
                     url: url,
                     type: type,
                     name: fileName,
@@ -509,9 +510,9 @@
             if (nextIdx === currentIndex) return;
 
             setAnimatingOut(currentIndex);
+            setCurrentIndex(nextIdx);
 
             setTimeout(() => {
-              setCurrentIndex(nextIdx);
               setAnimatingOut(null);
             }, animationSettings.outDuration * 1000);
           }, [mediaQueue, currentIndex, animationSettings.outDuration]);
@@ -539,9 +540,9 @@
             if (prevIdx === currentIndex) return;
 
             setAnimatingOut(currentIndex);
+            setCurrentIndex(prevIdx);
 
             setTimeout(() => {
-              setCurrentIndex(prevIdx);
               setAnimatingOut(null);
             }, animationSettings.outDuration * 1000);
           }, [mediaQueue, currentIndex, animationSettings.outDuration]);
@@ -758,13 +759,14 @@
           const handleMediaUpload = (e) => {
             const files = Array.from(e.target.files);
             const newMedia = files.map(file => ({
-              id: Math.random().toString(36).substr(2, 9),
+              id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 4)}-${file.name}`,
               file,
               url: URL.createObjectURL(file),
               type: file.type,
               name: file.name,
               duration: imageDuration,
-              enabled: true
+              enabled: true,
+              isLocalAsset: false
             }));
             setMediaQueue(prev => [...prev, ...newMedia]);
           };
@@ -1374,7 +1376,9 @@
                                   type: item.type,
                                   name: item.name,
                                   duration: item.duration,
-                                  file: item.file // Blob
+                                  file: item.file, // Blob
+                                  isLocalAsset: item.isLocalAsset,
+                                  url: item.url
                                 }));
                                 await savePlaylistToDB(mediaToSave);
                                 alert('Плейлист сохранен!');
@@ -1392,10 +1396,13 @@
                               try {
                                 const savedMedia = await loadPlaylistFromDB();
                                 if (savedMedia) {
-                                  const restoredMedia = savedMedia.map(item => ({
-                                    ...item,
-                                    url: URL.createObjectURL(item.file)
-                                  }));
+                                  const restoredMedia = savedMedia.map(item => {
+                                    if (item.isLocalAsset) return item;
+                                    return {
+                                      ...item,
+                                      url: URL.createObjectURL(item.file)
+                                    };
+                                  });
                                   setMediaQueue(prev => [...prev, ...restoredMedia]);
                                   alert('Плейлист загружен!');
                                 } else {
